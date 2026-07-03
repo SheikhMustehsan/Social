@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import "./Auth.css";
+import { API_BASE } from "../config";
 
 interface AuthProps {
   onLoginSuccess: (token: string, user: { id: string; email: string; globalRole: string }) => void;
@@ -19,7 +20,7 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
 
     const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
     try {
-      const response = await fetch(`http://localhost:3000${endpoint}`, {
+      const response = await fetch(`${API_BASE}${endpoint}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

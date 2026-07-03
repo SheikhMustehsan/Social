@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { API_BASE } from "../config";
 
 interface DiscoveredProfile {
   name: string;
@@ -46,7 +47,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
   const fetchProfiles = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://localhost:3000/api/profiles", {
+      const response = await fetch(`${API_BASE}/api/profiles`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "x-company-id": companyId,
@@ -65,7 +66,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
 
   const fetchDiscoveredProfiles = async () => {
     try {
-      const response = await fetch("http://localhost:3000/api/profiles/discover", {
+      const response = await fetch(`${API_BASE}/api/profiles/discover`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -97,7 +98,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
 
     try {
       console.log(`📡 Requesting headed browser launch for profile: ${chromeProfilePath}`);
-      const response = await fetch("http://localhost:3000/api/profiles/launch-browser", {
+      const response = await fetch(`${API_BASE}/api/profiles/launch-browser`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -145,7 +146,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
     }
 
     try {
-      const response = await fetch("http://localhost:3000/api/profiles", {
+      const response = await fetch(`${API_BASE}/api/profiles`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -183,7 +184,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
     if (!confirm("Are you sure you want to disconnect this profile?")) return;
 
     try {
-      const response = await fetch(`http://localhost:3000/api/profiles/${profileId}`, {
+      const response = await fetch(`${API_BASE}/api/profiles/${profileId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -453,3 +454,4 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
     </div>
   );
 }
+

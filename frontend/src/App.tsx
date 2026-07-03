@@ -3,6 +3,7 @@ import Auth from "./pages/Auth.js";
 import ConnectedProfiles from "./components/ConnectedProfiles.js";
 import Scheduler from "./components/Scheduler.js";
 import "./App.css";
+import { API_BASE } from "./config";
 
 interface User {
   id: string;
@@ -65,7 +66,7 @@ export default function App() {
   const fetchCompanies = async () => {
     setLoadingCompanies(true);
     try {
-      const response = await fetch("http://localhost:3000/api/companies", {
+      const response = await fetch(`${API_BASE}/api/companies`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -116,7 +117,7 @@ export default function App() {
   const fetchSummary = async () => {
     if (!activeCompanyId || !token) return;
     try {
-      const response = await fetch("http://localhost:3000/api/analytics/summary", {
+      const response = await fetch(`${API_BASE}/api/analytics/summary`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "x-company-id": activeCompanyId,
@@ -147,7 +148,7 @@ export default function App() {
     if (!newCompanyName.trim()) return;
 
     try {
-      const response = await fetch("http://localhost:3000/api/companies", {
+      const response = await fetch(`${API_BASE}/api/companies`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
