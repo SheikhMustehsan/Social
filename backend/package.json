@@ -1,0 +1,39 @@
+{
+  "name": "social-automation-backend",
+  "version": "1.0.0",
+  "description": "Multi-tenant social automation and analytics backend",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:studio": "drizzle-kit studio"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@fastify/jwt": "^8.0.1",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.0.0",
+    "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.30.10",
+    "fastify": "^4.26.2",
+    "playwright": "^1.44.1",
+    "bullmq": "^5.8.3",
+    "ioredis": "^5.4.1",
+    "@fastify/multipart": "^8.2.0"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/better-sqlite3": "^7.6.10",
+    "@types/node": "^20.12.12",
+    "drizzle-kit": "^0.21.4",
+    "tsx": "^4.10.5",
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,0 +1,160 @@
+.calendar-widget {
+  padding: 24px;
+  background: var(--grad-card);
+  border: 1px solid var(--border-color);
+  width: 100%;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.calendar-navigation {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.current-month-year {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 140px;
+  text-align: center;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 8px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-auto-rows: minmax(110px, auto);
+  border-left: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-color);
+}
+
+.calendar-day {
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  background: rgba(255, 255, 255, 0.005);
+}
+
+.calendar-day.empty {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.calendar-day.today {
+  background: var(--color-primary-glow);
+  box-shadow: inset 0 0 10px rgba(99, 102, 241, 0.1);
+}
+
+.calendar-day.today::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--grad-primary);
+}
+
+.day-number {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  align-self: flex-end;
+}
+
+.calendar-day.today .day-number {
+  color: var(--text-primary);
+}
+
+.day-posts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.calendar-post-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  font-size: 11px;
+  position: relative;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.calendar-post-badge:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+
+.platform-dot {
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  padding: 1px 3px;
+  border-radius: 3px;
+  margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.badge-caption {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+  margin-right: 4px;
+}
+
+.badge-cancel-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 20%;
+  line-height: 1;
+}
+
+.badge-cancel-btn:hover {
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.1);
+}

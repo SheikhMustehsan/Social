@@ -1,0 +1,382 @@
+import React, { useState, useEffect } from "react";
+import Auth from "./pages/Auth.js";
+import ConnectedProfiles from "./components/ConnectedProfiles.js";
+import Scheduler from "./components/Scheduler.js";
+import "./App.css";
+
+interface User {
+  id: string;
+  email: string;
+  globalRole: string;
+}
+
+interface Company {
+  id: string;
+  name: string;
+  createdAt: string;
+  role?: string;
+}
+
+export default function App() {
+  const [token, setToken] = useState<string | null>(localStorage.getItem("token"));
+  const [user, setUser] = useState<User | null>(null);
+  
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [activeCompanyId, setActiveCompanyId] = useState<string | null>(
+    localStorage.getItem("activeCompanyId")
+  );
+  
+  const [activeTab, setActiveTab] = useState<string>("dashboard");
+  const [newCompanyName, setNewCompanyName] = useState("");
+  const [showCreateCompanyModal, setShowCreateCompanyModal] = useState(false);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
+
+  const [summary, setSummary] = useState({
+    totalSpend: 0,
+    totalImpressions: 0,
+    totalClicks: 0,
+    totalConversions: 0,
+    ctr: 0,
+    cpc: 0
+  });
+
+  // Initialize user from local storage
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user");
+    if (savedUser) {
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch (e) {
+        localStorage.removeItem("user");
+      }
+    }
+  }, [token]);
+
+  // Fetch companies when token changes
+  useEffect(() => {
+    if (token) {
+      fetchCompanies();
+    } else {
+      setCompanies([]);
+      setActiveCompanyId(null);
+    }
+  }, [token]);
+
+  const fetchCompanies = async () => {
+    setLoadingCompanies(true);
+    try {
+      const response = await fetch("http://localhost:3000/api/companies", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.status === 401) {
+        handleLogout();
+        return;
+      }
+
+      const data = await response.json();
+      if (response.ok) {
+        setCompanies(data);
+        if (data.length > 0 && !activeCompanyId) {
+          selectCompany(data[0].id);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching companies:", err);
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
+  const handleLoginSuccess = (newToken: string, loggedUser: User) => {
+    localStorage.setItem("token", newToken);
+    localStorage.setItem("user", JSON.stringify(loggedUser));
+    setToken(newToken);
+    setUser(loggedUser);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    localStorage.removeItem("activeCompanyId");
+    setToken(null);
+    setUser(null);
+    setCompanies([]);
+    setActiveCompanyId(null);
+  };
+
+  const isUserAdmin = () => {
+    if (user?.globalRole === "super_admin") return true;
+    const activeCompany = companies.find(c => c.id === activeCompanyId);
+    return activeCompany?.role === "admin";
+  };
+
+  const fetchSummary = async () => {
+    if (!activeCompanyId || !token) return;
+    try {
+      const response = await fetch("http://localhost:3000/api/analytics/summary", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "x-company-id": activeCompanyId,
+        },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setSummary(data);
+      }
+    } catch (err) {
+      console.error("Error fetching summary:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (activeCompanyId && token) {
+      fetchSummary();
+    }
+  }, [activeCompanyId, activeTab, token]);
+
+  const selectCompany = (id: string) => {
+    localStorage.setItem("activeCompanyId", id);
+    setActiveCompanyId(id);
+  };
+
+  const handleCreateCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCompanyName.trim()) return;
+
+    try {
+      const response = await fetch("http://localhost:3000/api/companies", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ name: newCompanyName }),
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setNewCompanyName("");
+        setShowCreateCompanyModal(false);
+        await fetchCompanies();
+        selectCompany(data.id);
+      } else {
+        alert(data.error || "Failed to create company");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Network error creating company");
+    }
+  };
+
+  const getActiveCompany = () => {
+    return companies.find((c) => c.id === activeCompanyId);
+  };
+
+  if (!token || !user) {
+    return <Auth onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  return (
+    <div className="app-layout">
+      {/* 1. SIDEBAR */}
+      <aside className="sidebar glass-panel">
+        <div className="sidebar-brand">
+          <h1>BuzzinTech</h1>
+          <span className="role-tag">{user.globalRole === "super_admin" ? "Super Admin" : "Team Member"}</span>
+        </div>
+
+        {/* Company Context Selector */}
+        <div className="company-context-box">
+          <label className="glass-label">Active Workspace</label>
+          <div className="company-selector-wrapper">
+            <select
+              value={activeCompanyId || ""}
+              onChange={(e) => selectCompany(e.target.value)}
+              className="glass-input company-select"
+              disabled={loadingCompanies || companies.length === 0}
+            >
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} {c.role ? `(${c.role})` : ""}
+                </option>
+              ))}
+              {companies.length === 0 && <option value="">No Workspaces</option>}
+            </select>
+          </div>
+          
+          {user.globalRole === "super_admin" && (
+            <button 
+              className="glass-button add-workspace-btn"
+              onClick={() => setShowCreateCompanyModal(true)}
+            >
+              + New Company
+            </button>
+          )}
+        </div>
+
+        {/* Navigation Menu */}
+        <nav className="sidebar-nav">
+          <button
+            className={`nav-item ${activeTab === "dashboard" ? "active" : ""}`}
+            onClick={() => setActiveTab("dashboard")}
+          >
+            📊 Analytics Dashboard
+          </button>
+          <button
+            className={`nav-item ${activeTab === "scheduler" ? "active" : ""}`}
+            onClick={() => setActiveTab("scheduler")}
+          >
+            📅 Social Scheduler
+          </button>
+          <button
+            className={`nav-item ${activeTab === "moderation" ? "active" : ""}`}
+            onClick={() => setActiveTab("moderation")}
+          >
+            💬 Social Inbox
+          </button>
+          <button
+            className={`nav-item ${activeTab === "ads" ? "active" : ""}`}
+            onClick={() => setActiveTab("ads")}
+          >
+            📈 Ads Campaign Manager
+          </button>
+          <button
+            className={`nav-item ${activeTab === "profiles" ? "active" : ""}`}
+            onClick={() => setActiveTab("profiles")}
+          >
+            🔗 Connected Profiles
+          </button>
+          <button
+            className={`nav-item ${activeTab === "team" ? "active" : ""}`}
+            onClick={() => setActiveTab("team")}
+          >
+            👥 Team Members
+          </button>
+        </nav>
+
+        {/* User Profile / Logout */}
+        <div className="sidebar-footer">
+          <div className="user-info">
+            <p className="user-email">{user.email}</p>
+          </div>
+          <button className="glass-button logout-btn" onClick={handleLogout}>
+            Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* 2. MAIN CONTENT AREA */}
+      <main className="main-content">
+        <header className="content-header">
+          <h2>
+            {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} - {getActiveCompany()?.name || "No Company Context"}
+          </h2>
+          <div className="header-actions">
+            <span className="status-indicator">Connected</span>
+          </div>
+        </header>
+
+        <div className="content-body">
+          {/* Render Active Tab Panel Placeholder */}
+          {activeTab === "dashboard" && (
+            <div className="tab-panel animate-fade-in">
+              <div className="dashboard-grid">
+                <div className="glass-panel metric-card">
+                  <h3>Active Ad Spend</h3>
+                  <div className="metric-value">
+                    {summary.totalSpend.toLocaleString("en-US", { style: "currency", currency: "USD" })}
+                  </div>
+                  <p className="metric-subtext">Total campaign spend</p>
+                </div>
+                <div className="glass-panel metric-card">
+                  <h3>Clicks / Impressions</h3>
+                  <div className="metric-value">
+                    {summary.totalClicks.toLocaleString()} / {summary.totalImpressions.toLocaleString()}
+                  </div>
+                  <p className="metric-subtext">Conversions: {summary.totalConversions.toLocaleString()}</p>
+                </div>
+                <div className="glass-panel metric-card">
+                  <h3>CTR / CPC</h3>
+                  <div className="metric-value">
+                    {summary.ctr}% / ${summary.cpc}
+                  </div>
+                  <p className="metric-subtext">Averages calculated from ads CSV</p>
+                </div>
+              </div>
+              <div className="glass-panel chart-container-placeholder">
+                <p>Detailed performance graphs will appear here once CSV analytics sync.</p>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "scheduler" && (
+            <Scheduler token={token} companyId={activeCompanyId || ""} isAdmin={isUserAdmin()} />
+          )}
+
+          {activeTab === "moderation" && (
+            <div className="tab-panel glass-panel animate-fade-in placeholder-panel">
+              <h3>💬 Social Inbox & Auto-Moderation Slot</h3>
+              <p>Will connect DMs and comments via MutationObservers and auto-reply engines.</p>
+            </div>
+          )}
+
+          {activeTab === "ads" && (
+            <div className="tab-panel glass-panel animate-fade-in placeholder-panel">
+              <h3>📈 Ads Campaign Manager Slot</h3>
+              <p>Will fetch ad data, CTR, conversions, and handle spreadsheet reporting.</p>
+            </div>
+          )}
+
+          {activeTab === "profiles" && (
+            <ConnectedProfiles token={token} companyId={activeCompanyId || ""} isAdmin={isUserAdmin()} />
+          )}
+
+          {activeTab === "team" && (
+            <div className="tab-panel glass-panel animate-fade-in placeholder-panel">
+              <h3>👥 Team Members & Roles Slot</h3>
+              <p>Will list members, roles, and support inviting colleagues to this workspace.</p>
+            </div>
+          )}
+        </div>
+      </main>
+
+      {/* 3. CREATE COMPANY MODAL */}
+      {showCreateCompanyModal && (
+        <div className="modal-overlay">
+          <div className="glass-panel modal-card animate-fade-in">
+            <h3>Add New Workspace</h3>
+            <p>Every workspace is isolated, containing its own profiles and campaigns.</p>
+            <form onSubmit={handleCreateCompany}>
+              <div className="form-group" style={{ margin: "16px 0" }}>
+                <label className="glass-label">Company Name</label>
+                <input
+                  type="text"
+                  className="glass-input"
+                  placeholder="e.g. Brand Agency LLC"
+                  value={newCompanyName}
+                  onChange={(e) => setNewCompanyName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="modal-actions">
+                <button
+                  type="button"
+                  className="glass-button"
+                  onClick={() => setShowCreateCompanyModal(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="glass-button primary">
+                  Create Workspace
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
