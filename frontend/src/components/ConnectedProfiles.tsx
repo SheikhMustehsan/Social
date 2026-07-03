@@ -210,38 +210,6 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
     }
   };
 
-  return (
-    <div 
-      className="tab-panel animate-fade-in" 
-      style={{ 
-        display: "grid", 
-        gridTemplateColumns: isAdmin ? "1fr 1.3fr" : "1fr", 
-        gap: "24px" 
-      }}
-    >
-      
-      {/* Form to connect a profile */}
-      {isAdmin && (
-        <div className="glass-panel" style={{ padding: "24px", height: "fit-content" }}>
-        <h3>Link Social Account</h3>
-        <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: "8px 0 20px" }}>
-          Link your pre-authenticated Google Chrome session to publish posts natively.
-        </p>
-
-        {error && <div className="auth-error-message">{error}</div>}
-        {success && (
-          <div style={{
-            background: "rgba(16, 185, 129, 0.1)",
-            border: "1px solid rgba(16, 185, 129, 0.2)",
-            color: "#a7f3d0",
-            padding: "12px",
-            borderRadius: "var(--radius-sm)",
-            fontSize: "13px",
-            marginBottom: "20px",
-            textAlign: "center"
-          }}>{success}</div>
-        )}
-
   const handleDiscoveredChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const selectedPath = e.target.value;
     setChromeProfilePath(selectedPath);
