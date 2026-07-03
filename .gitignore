@@ -30,9 +30,11 @@ build/
 .DS_Store
 Thumbs.db
 
-# Media Uploads
+# Media Uploads & Session Data
 backend/data/uploads/
 data/uploads/
+backend/data/sessions/
+data/sessions/
 
 # Temporary folders
 temp/

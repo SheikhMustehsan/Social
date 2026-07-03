@@ -7,6 +7,7 @@ import { launchBrowserWithProfile } from "../../workers/utils/browserLauncher.js
 import fs from "fs";
 import path from "path";
 import os from "os";
+import crypto from "crypto";
 
 export async function profileRoutes(fastify: FastifyInstance) {
   // Protect all profile endpoints with authentication
@@ -83,13 +84,19 @@ export async function profileRoutes(fastify: FastifyInstance) {
   fastify.post("/launch-browser", { preHandler: [authorizeCompanyAdmin] }, async (request, reply) => {
     const { chromeProfilePath, platform } = request.body as any;
 
-    if (!chromeProfilePath) {
-      return reply.status(400).send({ error: "chromeProfilePath is required to launch browser session" });
+    // Generate server-side persistent profile path if none is supplied
+    let targetProfilePath = chromeProfilePath;
+    if (!targetProfilePath) {
+      const sessionDir = path.join(process.cwd(), "data", "sessions");
+      if (!fs.existsSync(sessionDir)) {
+        fs.mkdirSync(sessionDir, { recursive: true });
+      }
+      targetProfilePath = path.join(sessionDir, `session_${crypto.randomUUID()}`);
     }
 
     try {
-      console.log(`🖥️ Spawning headed browser session for: ${chromeProfilePath}`);
-      const context = await launchBrowserWithProfile(chromeProfilePath, { headless: false });
+      console.log(`🖥️ Spawning headed browser session for: ${targetProfilePath}`);
+      const context = await launchBrowserWithProfile(targetProfilePath, { headless: false });
       const page = await context.newPage();
 
       // Resolve starting URL based on selected social profile platform
@@ -109,7 +116,11 @@ export async function profileRoutes(fastify: FastifyInstance) {
       });
 
       console.log(`🏁 Headed login browser closed. Profile session cookies synchronized.`);
-      return reply.send({ status: "success", message: "Browser closed and session updated." });
+      return reply.send({ 
+        status: "success", 
+        message: "Browser closed and session updated.", 
+        chromeProfilePath: targetProfilePath 
+      });
     } catch (error: any) {
       fastify.log.error(error);
       

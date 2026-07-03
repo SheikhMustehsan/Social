@@ -88,7 +88,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
   const handleLaunchBrowser = async () => {
     setError("");
     setSuccess("");
-    if (!chromeProfilePath.trim()) {
+    if (useCustomPath && !chromeProfilePath.trim()) {
       setError("Please select a Chrome profile path first.");
       return;
     }
@@ -97,7 +97,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
     setBrowserLaunchedMessage("Opening Chrome window... Please log in to your account, go to the page you want to connect, and CLOSE the Chrome browser window when done.");
 
     try {
-      console.log(`📡 Requesting headed browser launch for profile: ${chromeProfilePath}`);
+      console.log(`📡 Requesting headed browser launch...`);
       const response = await fetch(`${API_BASE}/api/profiles/launch-browser`, {
         method: "POST",
         headers: {
@@ -106,42 +106,33 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
           "x-company-id": companyId,
         },
         body: JSON.stringify({
-          chromeProfilePath,
+          chromeProfilePath: useCustomPath ? chromeProfilePath : undefined,
           platform,
         }),
       });
 
       const data = await response.json();
-      if (response.ok) {
-        setSuccess(`Login session updated successfully! You can now link your ${platform} profile.`);
-      } else {
-        setError(data.error || "Failed to update login session.");
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to update login session.");
       }
-    } catch (err) {
-      setError("Failed to connect to browser launcher service.");
+
+      setSuccess(`Login session updated successfully! Saving profile...`);
+      
+      // If we are not in manual path mode, automatically save/link the profile right now!
+      if (!useCustomPath) {
+        await saveProfile(data.chromeProfilePath);
+      }
+    } catch (err: any) {
+      setError(err.message || "Failed to connect to browser launcher service.");
     } finally {
       setLaunchingBrowser(false);
       setBrowserLaunchedMessage("");
     }
   };
 
-  const handleDiscoveredChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedPath = e.target.value;
-    setChromeProfilePath(selectedPath);
-    
-    const matched = discoveredProfiles.find(dp => dp.path === selectedPath);
-    if (matched) {
-      setProfileName(matched.name + (matched.email ? ` (${matched.email})` : ""));
-    }
-  };
-
-  const handleConnectProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-
-    if (!profileName.trim() || !chromeProfilePath.trim()) {
-      setError("Please fill out all fields.");
+  const saveProfile = async (resolvedPath: string) => {
+    if (!profileName.trim()) {
+      setError("Please enter a Profile Label first.");
       return;
     }
 
@@ -156,27 +147,43 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
         body: JSON.stringify({
           platform,
           profileName,
-          chromeProfilePath,
+          chromeProfilePath: resolvedPath,
         }),
       });
 
       const data = await response.json();
       if (response.ok) {
         setSuccess(`Successfully linked ${profileName}!`);
-        // If not using custom path, reset name to first discovered profile, otherwise clear
-        if (discoveredProfiles.length > 0 && !useCustomPath) {
-          setChromeProfilePath(discoveredProfiles[0].path);
-          setProfileName(discoveredProfiles[0].name + (discoveredProfiles[0].email ? ` (${discoveredProfiles[0].email})` : ""));
-        } else {
-          setProfileName("");
-          setChromeProfilePath("");
-        }
+        setProfileName("");
+        setChromeProfilePath("");
         fetchProfiles();
       } else {
         setError(data.error || "Failed to link profile");
       }
     } catch (err) {
       setError("Network error connecting profile");
+    }
+  };
+
+  const handleConnectProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!profileName.trim()) {
+      setError("Please enter a Profile Label (Name).");
+      return;
+    }
+
+    if (useCustomPath) {
+      if (!chromeProfilePath.trim()) {
+        setError("Please enter a Chrome profile path.");
+        return;
+      }
+      await saveProfile(chromeProfilePath);
+    } else {
+      // Launch browser and link automatically
+      await handleLaunchBrowser();
     }
   };
 
@@ -235,8 +242,62 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
           }}>{success}</div>
         )}
 
+  const handleDiscoveredChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const selectedPath = e.target.value;
+    setChromeProfilePath(selectedPath);
+    const matched = discoveredProfiles.find(dp => dp.path === selectedPath);
+    if (matched) {
+      setProfileName(matched.name + (matched.email ? ` (${matched.email})` : ""));
+    }
+  };
+
+  return (
+    <div 
+      className="tab-panel animate-fade-in" 
+      style={{ 
+        display: "grid", 
+        gridTemplateColumns: isAdmin ? "1fr 1.3fr" : "1fr", 
+        gap: "24px" 
+      }}
+    >
+      
+      {/* Form to connect a profile */}
+      {isAdmin && (
+        <div className="glass-panel" style={{ padding: "24px", height: "fit-content" }}>
+        <h3>Link Social Account</h3>
+        <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: "8px 0 20px" }}>
+          Authenticate a new social profile directly on this server to publish posts natively.
+        </p>
+
+        {error && <div className="auth-error-message">{error}</div>}
+        {success && (
+          <div style={{
+            background: "rgba(16, 185, 129, 0.1)",
+            border: "1px solid rgba(16, 185, 129, 0.2)",
+            color: "#a7f3d0",
+            padding: "12px",
+            borderRadius: "var(--radius-sm)",
+            fontSize: "13px",
+            marginBottom: "20px",
+            textAlign: "center"
+          }}>{success}</div>
+        )}
+
         <form onSubmit={handleConnectProfile} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           
+          {/* Profile Label */}
+          <div className="form-group">
+            <label className="glass-label">Profile Label (Name)</label>
+            <input
+              type="text"
+              className="glass-input"
+              placeholder="e.g. Mustehsan's Personal FB"
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              required
+            />
+          </div>
+
           {/* Platform Selector */}
           <div className="form-group">
             <label className="glass-label">Social Platform</label>
@@ -253,134 +314,111 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
             </select>
           </div>
 
-          {/* Chrome Profile Selection (Auto Discovered vs Manual Input) */}
-          <div className="form-group">
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-              <label className="glass-label" style={{ margin: 0 }}>Chrome Session Profile</label>
-              
-              {discoveredProfiles.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUseCustomPath(!useCustomPath);
-                    setError("");
-                    setSuccess("");
-                    if (useCustomPath) {
-                      // Reset back to first discovered
-                      setChromeProfilePath(discoveredProfiles[0].path);
-                      setProfileName(discoveredProfiles[0].name + (discoveredProfiles[0].email ? ` (${discoveredProfiles[0].email})` : ""));
-                    } else {
-                      setChromeProfilePath("");
-                      setProfileName("");
-                    }
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    color: "var(--color-primary)",
-                    cursor: "pointer",
-                    fontSize: "11px",
-                    fontWeight: 600
-                  }}
+          {/* Advanced Path Selector (Hidden by default) */}
+          {useCustomPath && (
+            <div className="form-group" style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
+              <label className="glass-label">Chrome Session Profile (Advanced)</label>
+              {discoveredProfiles.length > 0 ? (
+                <select
+                  value={chromeProfilePath}
+                  onChange={handleDiscoveredChange}
+                  className="glass-input"
+                  style={{ background: "rgba(0,0,0,0.2)", marginBottom: "10px" }}
                 >
-                  {useCustomPath ? "Show Auto-Discovered Profiles" : "Enter Path Manually"}
-                </button>
-              )}
-            </div>
-
-            {discoveredProfiles.length > 0 && !useCustomPath ? (
-              // 1. Dropdown for auto-discovered profiles
-              <select
-                value={chromeProfilePath}
-                onChange={handleDiscoveredChange}
-                className="glass-input"
-                style={{ background: "rgba(0,0,0,0.2)" }}
-                required
-              >
-                {discoveredProfiles.map((dp) => (
-                  <option key={dp.path} value={dp.path}>
-                    👤 {dp.name} {dp.email ? `(${dp.email})` : ""}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              // 2. Fallback Manual File Input
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {discoveredProfiles.map((dp) => (
+                    <option key={dp.path} value={dp.path}>
+                      👤 {dp.name} {dp.email ? `(${dp.email})` : ""}
+                    </option>
+                  ))}
+                </select>
+              ) : (
                 <input
                   type="text"
                   className="glass-input"
-                  placeholder="C:\Users\username\AppData\Local\Google\Chrome\User Data\Profile 11"
+                  placeholder="C:\Users\username\AppData\Local\Google\Chrome\User Data\Profile 1"
                   value={chromeProfilePath}
                   onChange={(e) => setChromeProfilePath(e.target.value)}
-                  required
+                  style={{ marginBottom: "10px" }}
                 />
-                
-                <label className="glass-label">Profile Label (Name)</label>
-                <input
-                  type="text"
-                  className="glass-input"
-                  placeholder="e.g. Agency Main FB Profile"
-                  value={profileName}
-                  onChange={(e) => setProfileName(e.target.value)}
-                  required
-                />
-              </div>
-            )}
+              )}
 
-            {chromeProfilePath && (
-              <div style={{ marginTop: "12px" }}>
-                <button
-                  type="button"
-                  className="glass-button"
-                  style={{
-                    width: "100%",
-                    justifyContent: "center",
-                    borderColor: "var(--color-primary)",
-                    background: "rgba(99, 102, 241, 0.05)"
-                  }}
-                  onClick={handleLaunchBrowser}
-                  disabled={launchingBrowser}
-                >
-                  🔑 {launchingBrowser ? "Login Session Active..." : `Open Chrome to Log In to ${platform.toUpperCase()}`}
-                </button>
-                
-                {browserLaunchedMessage && (
-                  <div style={{
-                    fontSize: "11px",
-                    color: "#c7d2fe",
-                    background: "rgba(99, 102, 241, 0.1)",
-                    border: "1px solid rgba(99, 102, 241, 0.2)",
-                    padding: "10px",
-                    borderRadius: "4px",
-                    marginTop: "8px",
-                    textAlign: "center",
-                    lineHeight: "1.4"
-                  }}>
-                    ℹ️ {browserLaunchedMessage}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Helper details for discovered profiles */}
-          {discoveredProfiles.length > 0 && !useCustomPath && (
-            <div style={{
-              fontSize: "11px",
-              color: "var(--text-muted)",
-              background: "rgba(255,255,255,0.01)",
-              padding: "10px",
-              borderRadius: "4px",
-              border: "1px solid var(--border-color)",
-              wordBreak: "break-all"
-            }}>
-              📁 Selected path: <code style={{ color: "var(--text-secondary)" }}>{chromeProfilePath}</code>
+              <button
+                type="button"
+                className="glass-button"
+                style={{
+                  width: "100%",
+                  justifyContent: "center",
+                  borderColor: "var(--color-primary)",
+                  background: "rgba(99, 102, 241, 0.05)"
+                }}
+                onClick={handleLaunchBrowser}
+                disabled={launchingBrowser}
+              >
+                🔑 {launchingBrowser ? "Browser window active..." : "Step 1: Open Chrome and Log In"}
+              </button>
             </div>
           )}
 
-          <button type="submit" className="glass-button primary" style={{ justifyContent: "center", marginTop: "8px" }}>
-            Link Selected Channel
-          </button>
+          {/* Action Trigger */}
+          {!useCustomPath ? (
+            <button 
+              type="submit" 
+              className="glass-button primary animate-pulse" 
+              style={{ justifyContent: "center", marginTop: "8px" }}
+              disabled={launchingBrowser}
+            >
+              🚀 {launchingBrowser ? "Authenticating in Browser..." : "Authenticate & Link Channel"}
+            </button>
+          ) : (
+            <button 
+              type="submit" 
+              className="glass-button primary" 
+              style={{ justifyContent: "center", marginTop: "8px" }}
+              disabled={launchingBrowser}
+            >
+              Step 2: Link Selected Channel
+            </button>
+          )}
+
+          {/* Browser banner guide */}
+          {browserLaunchedMessage && (
+            <div style={{
+              fontSize: "11px",
+              color: "#c7d2fe",
+              background: "rgba(99, 102, 241, 0.1)",
+              border: "1px solid rgba(99, 102, 241, 0.2)",
+              padding: "10px",
+              borderRadius: "4px",
+              marginTop: "4px",
+              textAlign: "center",
+              lineHeight: "1.4"
+            }}>
+              ℹ️ {browserLaunchedMessage}
+            </div>
+          )}
+
+          {/* Toggle link */}
+          <div style={{ textAlign: "center", marginTop: "8px" }}>
+            <button
+              type="button"
+              onClick={() => {
+                setUseCustomPath(!useCustomPath);
+                setError("");
+                setSuccess("");
+                setChromeProfilePath("");
+              }}
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--color-primary)",
+                cursor: "pointer",
+                fontSize: "11px",
+                fontWeight: 600
+              }}
+            >
+              {useCustomPath ? "← Use simple automated setup" : "⚙️ Advanced options (custom profile path)"}
+            </button>
+          </div>
         </form>
       </div>
     )}
