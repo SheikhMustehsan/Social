@@ -138,16 +138,27 @@ export async function profileRoutes(fastify: FastifyInstance) {
   // 1. CONNECT / ADD A NEW SOCIAL PROFILE (Admin Only)
   fastify.post("/", { preHandler: [authorizeCompanyAdmin] }, async (request, reply) => {
     const companyId = request.headers["x-company-id"] as string;
-    const { platform, profileName, chromeProfilePath } = request.body as any;
+    const { platform, profileName, chromeProfilePath, profileId } = request.body as any;
 
     if (!platform || !profileName || !chromeProfilePath) {
-      return reply.status(400).send({ 
-        error: "Missing required fields: platform, profileName, and chromeProfilePath are required." 
+      return reply.status(400).send({
+        error: "Missing required fields: platform, profileName, and chromeProfilePath are required."
       });
     }
 
     if (!["facebook", "instagram", "linkedin", "tiktok"].includes(platform)) {
       return reply.status(400).send({ error: "Invalid platform. Must be 'facebook', 'instagram', 'linkedin', or 'tiktok'" });
+    }
+
+    // Facebook Pages and LinkedIn Company Pages require an explicit target, since one
+    // logged-in account can administer many pages. Instagram/TikTok log in as a single
+    // account, so there's nothing to disambiguate.
+    if ((platform === "facebook" || platform === "linkedin") && !profileId) {
+      return reply.status(400).send({
+        error: platform === "facebook"
+          ? "The exact Facebook Page name is required so the bot knows which Page to post to."
+          : "The LinkedIn Company Page URL or ID is required so the bot knows which Page to post to."
+      });
     }
 
     try {
@@ -156,6 +167,7 @@ export async function profileRoutes(fastify: FastifyInstance) {
         platform,
         profileName,
         chromeProfilePath,
+        profileId: profileId || null,
         status: "connected",
       }).returning();
 

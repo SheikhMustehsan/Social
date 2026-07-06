@@ -12,6 +12,7 @@ interface Profile {
   platform: string;
   profileName: string;
   chromeProfilePath: string;
+  profileId: string | null;
   status: string;
 }
 
@@ -31,8 +32,11 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
   const [platform, setPlatform] = useState("facebook");
   const [profileName, setProfileName] = useState("");
   const [chromeProfilePath, setChromeProfilePath] = useState("");
+  const [targetPageId, setTargetPageId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  const needsTargetPage = platform === "facebook" || platform === "linkedin";
   
   const [launchingBrowser, setLaunchingBrowser] = useState(false);
   const [browserLaunchedMessage, setBrowserLaunchedMessage] = useState("");
@@ -136,6 +140,15 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
       return;
     }
 
+    if (needsTargetPage && !targetPageId.trim()) {
+      setError(
+        platform === "facebook"
+          ? "Please enter the exact Facebook Page name to post to."
+          : "Please enter the LinkedIn Company Page URL or ID to post to."
+      );
+      return;
+    }
+
     try {
       const response = await fetch(`${API_BASE}/api/profiles`, {
         method: "POST",
@@ -148,6 +161,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
           platform,
           profileName,
           chromeProfilePath: resolvedPath,
+          profileId: needsTargetPage ? targetPageId.trim() : undefined,
         }),
       });
 
@@ -156,6 +170,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
         setSuccess(`Successfully linked ${profileName}!`);
         setProfileName("");
         setChromeProfilePath("");
+        setTargetPageId("");
         fetchProfiles();
       } else {
         setError(data.error || "Failed to link profile");
@@ -172,6 +187,15 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
 
     if (!profileName.trim()) {
       setError("Please enter a Profile Label (Name).");
+      return;
+    }
+
+    if (needsTargetPage && !targetPageId.trim()) {
+      setError(
+        platform === "facebook"
+          ? "Please enter the exact Facebook Page name to post to."
+          : "Please enter the LinkedIn Company Page URL or ID to post to."
+      );
       return;
     }
 
@@ -281,6 +305,32 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
               <option value="tiktok">TikTok Studio</option>
             </select>
           </div>
+
+          {/* Target Page (Facebook/LinkedIn only - one login can manage many pages) */}
+          {needsTargetPage && (
+            <div className="form-group">
+              <label className="glass-label">
+                {platform === "facebook" ? "Facebook Page Name (exact)" : "LinkedIn Company Page URL or ID"}
+              </label>
+              <input
+                type="text"
+                className="glass-input"
+                placeholder={
+                  platform === "facebook"
+                    ? "Exact name as shown on the Page, e.g. Buzzin Tech"
+                    : "e.g. https://www.linkedin.com/company/buzzin-tech or 12345678"
+                }
+                value={targetPageId}
+                onChange={(e) => setTargetPageId(e.target.value)}
+                required
+              />
+              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                {platform === "facebook"
+                  ? "This account can administer many Pages — we need the exact Page name to pick the right one when posting."
+                  : "This account can administer many Company Pages — we need the Page URL or ID to post there instead of your personal feed."}
+              </p>
+            </div>
+          )}
 
           {/* Advanced Path Selector (Hidden by default) */}
           {useCustomPath && (
@@ -435,13 +485,27 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
                       {p.platform}
                     </span>
                   </div>
+                  {p.profileId && (
+                    <p style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                      Posts to: {p.profileId}
+                    </p>
+                  )}
                   <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px", maxWidth: "400px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     Path: {p.chromeProfilePath}
                   </p>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <span className="status-indicator" style={{ border: "none" }}>{p.status}</span>
+                  <span
+                    className="status-indicator"
+                    style={
+                      p.status === "error"
+                        ? { border: "none", color: "var(--color-danger)", background: "rgba(239, 68, 68, 0.1)" }
+                        : { border: "none" }
+                    }
+                  >
+                    {p.status === "error" ? "session expired" : p.status}
+                  </span>
                   {isAdmin && (
                     <button
                       className="glass-button"

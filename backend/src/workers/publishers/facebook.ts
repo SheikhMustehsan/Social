@@ -6,27 +6,60 @@ export async function publishToFacebookSuite(
   context: BrowserContext,
   caption: string,
   mediaPaths: string[],
-  placements: ("facebook" | "instagram")[] = ["facebook"]
+  placements: ("facebook" | "instagram")[] = ["facebook"],
+  pageIdentifier?: string
 ): Promise<void> {
   const page = await context.newPage();
-  
+
   try {
     console.log("➡️ Navigating to Meta Business Suite Composer...");
     // Go directly to Meta Business Suite composer editor
-    await page.goto("https://business.facebook.com/latest/composer?ref=composer", { 
-      waitUntil: "domcontentloaded", 
-      timeout: 60000 
+    await page.goto("https://business.facebook.com/latest/composer?ref=composer", {
+      waitUntil: "domcontentloaded",
+      timeout: 60000
     });
     await page.waitForTimeout(5000);
 
     // Verify login state
     const composerTitle = page.locator("text=Create post");
     const isComposerVisible = await composerTitle.first().isVisible();
-    
+
     if (!isComposerVisible) {
       const errorScreenshot = `error_meta_login_${Date.now()}.png`;
       await page.screenshot({ path: errorScreenshot });
       throw new Error(`Meta Business Suite session expired. Saved screenshot to ${errorScreenshot}`);
+    }
+
+    // A single Meta login can administer many Pages, and the composer defaults to
+    // whichever Page/account was last active in Business Suite. If we know the target
+    // Page, explicitly switch to it via the account switcher before doing anything else.
+    // NOTE: the selectors below are a best-effort match for Business Suite's account
+    // switcher and may need adjusting to Meta's current DOM (same caveat as the other
+    // selectors in this file).
+    if (pageIdentifier) {
+      console.log(`🔎 Selecting target Page: ${pageIdentifier}`);
+      const accountSwitcher = page.locator(
+        "[aria-label='Accounts'], [aria-label='Switch accounts'], div[role='button']:has-text('Switch')"
+      ).first();
+      if (await accountSwitcher.isVisible().catch(() => false)) {
+        await accountSwitcher.click();
+        await page.waitForTimeout(1000);
+        const pageOption = page.locator(`text="${pageIdentifier}"`).first();
+        if (await pageOption.isVisible().catch(() => false)) {
+          await pageOption.click();
+          await page.waitForTimeout(2000);
+        }
+      }
+
+      // Confirm the target Page name is now showing somewhere in the composer before posting.
+      const confirmedOnPage = await page.locator(`text="${pageIdentifier}"`).first().isVisible().catch(() => false);
+      if (!confirmedOnPage) {
+        const errorScreenshot = `error_meta_wrong_page_${Date.now()}.png`;
+        await page.screenshot({ path: errorScreenshot });
+        throw new Error(
+          `Could not confirm the composer is targeting Page "${pageIdentifier}". Saved screenshot to ${errorScreenshot}. Refusing to post to avoid publishing to the wrong Page.`
+        );
+      }
     }
 
     // 1. Choose placements (FB / IG checkboxes)

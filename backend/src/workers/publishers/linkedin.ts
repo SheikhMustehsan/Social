@@ -5,23 +5,41 @@ import fs from "fs";
 export async function publishToLinkedIn(
   context: BrowserContext,
   caption: string,
-  mediaPaths: string[]
+  mediaPaths: string[],
+  pageIdentifier?: string
 ): Promise<void> {
   const page = await context.newPage();
-  
+
   try {
-    console.log("➡️ Navigating to LinkedIn...");
-    await page.goto("https://www.linkedin.com/feed/", { waitUntil: "domcontentloaded", timeout: 45000 });
+    // One LinkedIn login can administer many Company Pages. If we know the target Page,
+    // go straight to that Page's admin composer instead of the personal feed - otherwise
+    // this would always post as the person, never as the Page.
+    let targetUrl = "https://www.linkedin.com/feed/";
+    if (pageIdentifier) {
+      const slugMatch = pageIdentifier.match(/linkedin\.com\/company\/([^/?#]+)/i);
+      const companySlug = slugMatch ? slugMatch[1] : pageIdentifier.trim();
+      targetUrl = `https://www.linkedin.com/company/${companySlug}/admin/page-posts/published/`;
+    }
+
+    console.log(`➡️ Navigating to LinkedIn ${pageIdentifier ? `Company Page admin (${pageIdentifier})` : "personal feed"}...`);
+    await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
     await page.waitForTimeout(3000);
 
-    // Verify if logged in by checking for the post box trigger
-    const postTrigger = page.locator("button:has-text('Start a post')").first();
+    // Verify if logged in / has admin access by checking for the post box trigger.
+    // NOTE: the Company Page admin dashboard's trigger wording/selector may differ from
+    // the personal feed's "Start a post" button - adjust to match LinkedIn's current UI
+    // if this fails to find it despite valid credentials and admin access.
+    const postTrigger = page.locator("button:has-text('Start a post'), button:has-text('Create a post')").first();
     const triggerExists = await postTrigger.isVisible();
-    
+
     if (!triggerExists) {
-      // Take screenshot of failure state
       const errorScreenshot = `error_linkedin_login_${Date.now()}.png`;
       await page.screenshot({ path: errorScreenshot });
+      if (pageIdentifier) {
+        throw new Error(
+          `Could not open the post composer for LinkedIn Company Page "${pageIdentifier}". This means either the login session expired, the account lacks admin access to that Page, or the Page URL/ID is wrong. Saved screenshot to ${errorScreenshot}`
+        );
+      }
       throw new Error(`LinkedIn Login Session expired. Saved login error screenshot to ${errorScreenshot}`);
     }
 

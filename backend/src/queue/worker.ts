@@ -66,9 +66,9 @@ export const postingWorker = new Worker(
       
       if (profile.platform === "facebook" || profile.platform === "instagram") {
         const platformKey = profile.platform as "facebook" | "instagram";
-        await publishToFacebookSuite(context, post.caption || "", mediaList, [platformKey]);
+        await publishToFacebookSuite(context, post.caption || "", mediaList, [platformKey], profile.profileId || undefined);
       } else if (profile.platform === "linkedin") {
-        await publishToLinkedIn(context, post.caption || "", mediaList);
+        await publishToLinkedIn(context, post.caption || "", mediaList, profile.profileId || undefined);
       } else if (profile.platform === "tiktok") {
         if (!mediaList || mediaList.length === 0) {
           throw new Error("TikTok requires a video file attachment to post");
@@ -85,16 +85,26 @@ export const postingWorker = new Worker(
         publishedAt: new Date(),
         errorMessage: null,
       }).where(eq(posts.id, postId));
-      
+
+      // A successful publish proves the linked session is healthy again
+      if (profile.status !== "connected") {
+        await db.update(socialProfiles).set({ status: "connected" }).where(eq(socialProfiles.id, profile.id));
+      }
+
       console.log(`🎉 Job succeeded! Post ${postId} is published.`);
     } catch (err: any) {
       console.error(`❌ Job failed for Post ${postId}:`, err.message);
-      
+
       // Update database with failure log
       await db.update(posts).set({
         status: "failed",
         errorMessage: err.message,
       }).where(eq(posts.id, postId));
+
+      // Flag the profile itself so Connected Profiles stops showing a stale "connected" badge
+      if (/session expired/i.test(err.message || "")) {
+        await db.update(socialProfiles).set({ status: "error" }).where(eq(socialProfiles.id, profile.id));
+      }
 
       throw err; // Rethrow to let BullMQ handle attempts/backoff
     } finally {
