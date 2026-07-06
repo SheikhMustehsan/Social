@@ -126,7 +126,7 @@ export async function profileRoutes(fastify: FastifyInstance) {
       
       // Check if it's a closed context error
       if (error.message && error.message.includes("Target page, context or browser has been closed")) {
-        return reply.send({ status: "success", message: "Browser closed." });
+        return reply.send({ status: "success", message: "Browser closed.", chromeProfilePath: targetProfilePath });
       }
 
       return reply.status(500).send({ 
