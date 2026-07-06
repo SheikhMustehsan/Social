@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Capture Social Session</title>
+  <style>
+    body {
+      width: 300px;
+      font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #0f1117;
+      color: #e5e7eb;
+      padding: 16px;
+    }
+    h1 {
+      font-size: 14px;
+      margin: 0 0 8px;
+    }
+    p {
+      font-size: 12px;
+      color: #9ca3af;
+      line-height: 1.5;
+      margin: 0 0 12px;
+    }
+    #detected {
+      font-size: 12px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      margin-bottom: 12px;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 6px;
+      background: #6366f1;
+      color: white;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 12px;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    #status.error { color: #f87171; }
+    #status.success { color: #34d399; }
+  </style>
+</head>
+<body>
+  <h1>Capture Social Session</h1>
+  <p>Log in to the account you want to connect, keep this tab on that site, then click Capture.</p>
+  <div id="detected">Checking current tab...</div>
+  <button id="captureBtn" disabled>Capture Session</button>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

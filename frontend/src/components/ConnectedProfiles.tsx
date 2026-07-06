@@ -252,7 +252,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
       await saveProfile(chromeProfilePath);
     } else {
       if (!uploadedSessionPath) {
-        setError("Please upload a session file captured via 'npm run capture-session' first.");
+        setError("Please upload a session file first (capture it with the browser extension, or 'npm run capture-session').");
         return;
       }
       await saveProfile(uploadedSessionPath);
@@ -386,10 +386,14 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
             <div className="form-group" style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
               <label className="glass-label">Session File</label>
               <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "8px", lineHeight: "1.5" }}>
-                On a computer with a browser (e.g. your own PC), run{" "}
-                <code>cd backend &amp;&amp; npm run capture-session -- {platform}</code>, log in when
-                Chrome opens, then press Enter in that terminal. Upload the generated{" "}
-                <code>session_*.json</code> file below.
+                <strong>No code needed:</strong> install the Session Capture browser extension
+                (<code>browser-extension/</code> folder — load it unpacked via
+                chrome://extensions), log in to {platform}, click the extension, then upload the
+                file it downloads below.
+                <br />
+                <em>Have the codebase instead?</em> Run{" "}
+                <code>cd backend &amp;&amp; npm run capture-session -- {platform}</code> and
+                upload the resulting <code>session_*.json</code> file.
               </p>
               <input
                 type="file"

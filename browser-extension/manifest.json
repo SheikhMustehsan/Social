@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Social Automation - Session Capture",
+  "version": "1.0.0",
+  "description": "Captures your Facebook, Instagram, LinkedIn, or TikTok login session so it can be uploaded to the Social Automation scheduler - no code or local setup required.",
+  "permissions": ["cookies", "activeTab", "scripting", "downloads"],
+  "host_permissions": [
+    "*://*.facebook.com/*",
+    "*://*.instagram.com/*",
+    "*://*.linkedin.com/*",
+    "*://*.tiktok.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Capture Social Session"
+  }
+}

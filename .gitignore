@@ -36,6 +36,10 @@ data/uploads/
 backend/data/sessions/
 data/sessions/
 
+# Raw captured login sessions (contain live cookies - never commit these)
+session_*.json
+backend/session_*.json
+
 # Temporary folders
 temp/
 tmp/
