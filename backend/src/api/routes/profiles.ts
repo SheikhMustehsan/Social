@@ -160,7 +160,11 @@ export async function profileRoutes(fastify: FastifyInstance) {
 
       await new Promise<void>((resolve, reject) => {
         data.file.pipe(writeStream);
-        data.file.on("end", resolve);
+        // Wait for the write stream to actually flush to disk, not just the source
+        // stream to finish emitting - reading the file back before this resolves
+        // can see a truncated/empty file.
+        writeStream.on("finish", resolve);
+        writeStream.on("error", reject);
         data.file.on("error", (err) => {
           writeStream.destroy();
           reject(err);
