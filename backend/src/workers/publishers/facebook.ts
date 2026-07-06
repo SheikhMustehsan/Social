@@ -41,20 +41,23 @@ export async function publishToFacebookSuite(
       ).first();
 
       try {
-        // Wait for switcher to load and click it
-        await accountSwitcher.waitFor({ state: "visible", timeout: 15000 });
+        // Wait for switcher to be attached (loaded in DOM) and click it
+        await accountSwitcher.waitFor({ state: "attached", timeout: 25000 });
         await accountSwitcher.click();
         await page.waitForTimeout(2000);
 
-        // Target the specific option inside the menu
-        const pageOption = page.locator(
-          `div[role='menuitem']:has-text("${pageIdentifier}"), div[role='button']:has-text("${pageIdentifier}"), text="${pageIdentifier}"`
-        ).first();
+        // Target the specific option inside the visible dropdown menu
+        const pageOption = page.locator([
+          `[role="menu"] text="${pageIdentifier}"`,
+          `[role="listbox"] text="${pageIdentifier}"`,
+          `[role="dialog"] text="${pageIdentifier}"`,
+          `text="${pageIdentifier}"`
+        ].join(", ")).locator("visible=true").first();
 
-        await pageOption.waitFor({ state: "visible", timeout: 8000 });
+        await pageOption.waitFor({ state: "visible", timeout: 12000 });
         await pageOption.click();
         console.log(`✅ Clicked Page switcher option for: ${pageIdentifier}`);
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(4000);
       } catch (err: any) {
         console.log(`⚠️ Switcher not found or failed to select page: ${err.message}. Proceeding with active selection...`);
       }
