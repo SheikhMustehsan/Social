@@ -110,7 +110,61 @@ export async function schedulerRoutes(fastify: FastifyInstance) {
     }
   });
 
-  // 3. CANCEL / DELETE SCHEDULED POST (Admin Only)
+  // 3. RESCHEDULE A POST'S DATE/TIME (Admin Only)
+  fastify.patch("/posts/:postId", { preHandler: [authorizeCompanyAdmin] }, async (request, reply) => {
+    const companyId = request.headers["x-company-id"] as string;
+    const { postId } = request.params as any;
+    const { scheduledAt } = request.body as any;
+
+    if (!scheduledAt) {
+      return reply.status(400).send({ error: "scheduledAt is required" });
+    }
+
+    try {
+      const foundPosts = await db
+        .select()
+        .from(posts)
+        .where(
+          and(
+            eq(posts.id, postId),
+            eq(posts.companyId, companyId)
+          )
+        )
+        .limit(1);
+
+      if (foundPosts.length === 0) {
+        return reply.status(404).send({ error: "Post not found" });
+      }
+
+      const scheduleDate = new Date(scheduledAt);
+      const delay = Math.max(0, scheduleDate.getTime() - Date.now());
+
+      // Remove the existing delayed job so it doesn't fire at the old time
+      const job = await postingQueue.getJob(`post_${postId}`);
+      if (job) {
+        await job.remove();
+      }
+
+      const updated = await db
+        .update(posts)
+        .set({ scheduledAt: scheduleDate, status: "scheduled", errorMessage: null })
+        .where(eq(posts.id, postId))
+        .returning();
+
+      await postingQueue.add(
+        "publish-post",
+        { postId },
+        { delay, jobId: `post_${postId}` }
+      );
+
+      return reply.send(updated[0]);
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Failed to reschedule post" });
+    }
+  });
+
+  // 4. CANCEL / DELETE SCHEDULED POST (Admin Only)
   fastify.delete("/posts/:postId", { preHandler: [authorizeCompanyAdmin] }, async (request, reply) => {
     const companyId = request.headers["x-company-id"] as string;
     const { postId } = request.params as any;

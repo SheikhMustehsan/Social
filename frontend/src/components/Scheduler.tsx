@@ -200,6 +200,29 @@ export default function Scheduler({ token, companyId, isAdmin }: SchedulerProps)
     }
   };
 
+  const handleReschedulePost = async (postId: string, scheduledAt: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/scheduler/posts/${postId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "x-company-id": companyId,
+        },
+        body: JSON.stringify({ scheduledAt }),
+      });
+
+      if (response.ok) {
+        fetchQueue();
+      } else {
+        const data = await response.json();
+        alert(data.error || "Failed to reschedule post");
+      }
+    } catch (err) {
+      alert("Error rescheduling post");
+    }
+  };
+
   const handleCancelPost = async (postId: string) => {
     try {
       const response = await fetch(`${API_BASE}/api/scheduler/posts/${postId}`, {
@@ -449,7 +472,7 @@ export default function Scheduler({ token, companyId, isAdmin }: SchedulerProps)
       <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
         
         {/* Render interactive calendar component */}
-        <Calendar posts={postsQueue} onCancelPost={handleCancelPost} />
+        <Calendar posts={postsQueue} onCancelPost={handleCancelPost} onReschedulePost={handleReschedulePost} />
 
         {/* Failed items log / details summary */}
         {postsQueue.some(p => p.status === "failed") && (

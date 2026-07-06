@@ -95,30 +95,32 @@
 
 .day-posts-list {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 4px;
   flex: 1;
+  align-content: flex-start;
 }
 
-.calendar-post-badge {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-  font-size: 11px;
-  position: relative;
-  transition: all 0.2s ease;
+.calendar-post-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
   cursor: pointer;
-  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
-.calendar-post-badge:hover {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: var(--border-hover);
-  transform: translateY(-1px);
+.calendar-post-icon:hover {
+  transform: translateY(-1px) scale(1.08);
+  filter: brightness(1.15);
 }
 
 .platform-dot {
@@ -129,32 +131,6 @@
   border-radius: 3px;
   margin-right: 4px;
   flex-shrink: 0;
-}
-
-.badge-caption {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-primary);
-  margin-right: 4px;
-}
-
-.badge-cancel-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 14px;
-  cursor: pointer;
-  padding: 0 2px;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 20%;
-  line-height: 1;
-}
-
-.badge-cancel-btn:hover {
-  color: var(--color-danger);
-  background: rgba(239, 68, 68, 0.1);
 }

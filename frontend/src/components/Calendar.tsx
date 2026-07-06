@@ -8,6 +8,7 @@ interface Post {
   status: string;
   scheduledAt: string | null;
   publishedAt: string | null;
+  errorMessage?: string | null;
   profile: {
     id: string;
     platform: string;
@@ -18,10 +19,55 @@ interface Post {
 interface CalendarProps {
   posts: Post[];
   onCancelPost: (postId: string) => void;
+  onReschedulePost: (postId: string, scheduledAt: string) => void;
 }
 
-export default function Calendar({ posts, onCancelPost }: CalendarProps) {
+// Format a Date into the value shape <input type="date"> / <input type="time"> expect, using local time
+function toDateInputValue(date: Date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function toTimeInputValue(date: Date) {
+  const h = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+  return `${h}:${min}`;
+}
+
+export default function Calendar({ posts, onCancelPost, onReschedulePost }: CalendarProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [editTime, setEditTime] = useState("");
+
+  const openPostDetails = (post: Post) => {
+    setSelectedPost(post);
+    if (post.scheduledAt) {
+      const d = new Date(post.scheduledAt);
+      setEditDate(toDateInputValue(d));
+      setEditTime(toTimeInputValue(d));
+    } else {
+      setEditDate("");
+      setEditTime("");
+    }
+  };
+
+  const closePostDetails = () => setSelectedPost(null);
+
+  const handleSaveReschedule = () => {
+    if (!selectedPost || !editDate || !editTime) return;
+    const newScheduledAt = new Date(`${editDate}T${editTime}`).toISOString();
+    onReschedulePost(selectedPost.id, newScheduledAt);
+    closePostDetails();
+  };
+
+  const handleDiscard = () => {
+    if (!selectedPost) return;
+    onCancelPost(selectedPost.id);
+    closePostDetails();
+  };
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -130,42 +176,77 @@ export default function Calendar({ posts, onCancelPost }: CalendarProps) {
               
               <div className="day-posts-list">
                 {dayPosts.map((post) => (
-                  <div
+                  <button
                     key={post.id}
-                    className="calendar-post-badge"
-                    style={{
-                      borderLeft: `3px solid ${getPlatformColor(post.profile.platform)}`,
-                      background: "rgba(255,255,255,0.03)"
-                    }}
-                    title={`${post.profile.profileName} (${post.profile.platform.toUpperCase()}): "${post.caption}" [${post.status}]`}
+                    type="button"
+                    className="calendar-post-icon"
+                    style={{ backgroundColor: getPlatformColor(post.profile.platform) }}
+                    title={`${post.profile.profileName} (${post.profile.platform.toUpperCase()}): "${post.caption || "(No caption)"}" [${post.status}]`}
+                    onClick={() => openPostDetails(post)}
                   >
-                    <span
-                      className="platform-dot"
-                      style={{ backgroundColor: getPlatformColor(post.profile.platform) }}
-                    >
-                      {getPlatformAbbreviation(post.profile.platform)}
-                    </span>
-                    <span className="badge-caption">{post.caption || "(No caption)"}</span>
-                    
-                    {post.status === "scheduled" && (
-                      <button
-                        className="badge-cancel-btn"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onCancelPost(post.id);
-                        }}
-                        title="Cancel publication"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
+                    {getPlatformAbbreviation(post.profile.platform)}
+                  </button>
                 ))}
               </div>
             </div>
           );
         })}
       </div>
+
+      {/* Post details / reschedule / discard popup */}
+      {selectedPost && (
+        <div className="modal-overlay" onClick={closePostDetails}>
+          <div className="glass-panel modal-card animate-fade-in" onClick={(e) => e.stopPropagation()}>
+            <h3>
+              <span
+                className="platform-dot"
+                style={{ backgroundColor: getPlatformColor(selectedPost.profile.platform) }}
+              >
+                {getPlatformAbbreviation(selectedPost.profile.platform)}
+              </span>{" "}
+              {selectedPost.profile.profileName}
+            </h3>
+            <p style={{ textTransform: "capitalize" }}>Status: {selectedPost.status}</p>
+            <p>{selectedPost.caption || "(No caption)"}</p>
+            {selectedPost.errorMessage && (
+              <p style={{ color: "var(--color-danger)" }}>{selectedPost.errorMessage}</p>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", margin: "16px 0" }}>
+              <div className="form-group">
+                <label className="glass-label">Date</label>
+                <input
+                  type="date"
+                  className="glass-input"
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label className="glass-label">Time</label>
+                <input
+                  type="time"
+                  className="glass-input"
+                  value={editTime}
+                  onChange={(e) => setEditTime(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="modal-actions">
+              <button className="glass-button" style={{ borderColor: "rgba(239, 68, 68, 0.2)" }} onClick={handleDiscard}>
+                Discard Post
+              </button>
+              <button className="glass-button" onClick={closePostDetails}>
+                Close
+              </button>
+              <button className="glass-button primary" onClick={handleSaveReschedule} disabled={!editDate || !editTime}>
+                Save Date/Time
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
