@@ -36,37 +36,38 @@ export async function publishToFacebookSuite(
     // whichever Page/account was last active in Business Suite. If we know the target
     // Page, explicitly switch to it via the account switcher before doing anything else.
     if (pageIdentifier) {
-      console.log(`🔎 Checking if already on target Page: ${pageIdentifier}`);
-      const alreadyOnPage = await page.locator(`text="${pageIdentifier}"`).first().isVisible().catch(() => false);
+      console.log(`🔎 Selecting target Page: ${pageIdentifier}`);
+      
+      const accountSwitcher = page.locator(
+        "[aria-label='Accounts'], [aria-label='Switch accounts'], div[role='button']:has-text('Switch')"
+      ).first();
 
-      if (alreadyOnPage) {
-        console.log(`✅ Already targeting Page: ${pageIdentifier}`);
-      } else {
-        console.log(`🔎 Selecting target Page via switcher: ${pageIdentifier}`);
-        const accountSwitcher = page.locator(
-          "[aria-label='Accounts'], [aria-label='Switch accounts'], div[role='button']:has-text('Switch')"
+      try {
+        // Wait for switcher to load and click it
+        await accountSwitcher.waitFor({ state: "visible", timeout: 15000 });
+        await accountSwitcher.click();
+        await page.waitForTimeout(2000);
+
+        // Target the specific option inside the menu
+        const pageOption = page.locator(
+          `div[role='menuitem']:has-text("${pageIdentifier}"), div[role='button']:has-text("${pageIdentifier}"), text="${pageIdentifier}"`
         ).first();
 
-        if (await accountSwitcher.isVisible().catch(() => false)) {
-          await accountSwitcher.click();
-          await page.waitForTimeout(1500);
-
-          const pageOption = page.locator(`text="${pageIdentifier}"`).first();
-          try {
-            await pageOption.waitFor({ state: "visible", timeout: 5000 });
-            await pageOption.click();
-            await page.waitForTimeout(3000);
-          } catch (e: any) {
-            console.warn(`⚠️ Target Page option "${pageIdentifier}" not found in switcher:`, e.message);
-          }
-        } else {
-          console.warn("⚠️ Account switcher button not found or not visible.");
-        }
+        await pageOption.waitFor({ state: "visible", timeout: 8000 });
+        await pageOption.click();
+        console.log(`✅ Clicked Page switcher option for: ${pageIdentifier}`);
+        await page.waitForTimeout(3000);
+      } catch (err: any) {
+        console.log(`⚠️ Switcher not found or failed to select page: ${err.message}. Proceeding with active selection...`);
       }
 
-      // Confirm the target Page name is now showing somewhere in the composer before posting.
+      // Confirm the target Page name is now showing somewhere in the composer workspace before posting.
       try {
-        await page.locator(`text="${pageIdentifier}"`).first().waitFor({ state: "visible", timeout: 12000 });
+        // Look for page name in main header/composer view
+        const composerHeader = page.locator(
+          `[role='main']:has-text("${pageIdentifier}"), .composer-header:has-text("${pageIdentifier}"), text="${pageIdentifier}"`
+        ).first();
+        await composerHeader.waitFor({ state: "visible", timeout: 15000 });
         console.log(`✅ Confirmed targeting Page: ${pageIdentifier}`);
       } catch (err) {
         const errorScreenshot = `error_meta_wrong_page_${Date.now()}.png`;

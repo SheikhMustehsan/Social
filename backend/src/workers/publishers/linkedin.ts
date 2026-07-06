@@ -32,16 +32,17 @@ export async function publishToLinkedIn(
     const postTrigger = page.locator("button:has-text('Start a post'), button:has-text('Create a post')").first();
     
     try {
-      await postTrigger.waitFor({ state: "visible", timeout: 20000 });
+      await postTrigger.waitFor({ state: "visible", timeout: 25000 });
     } catch (err) {
+      const currentUrl = page.url();
       const errorScreenshot = `error_linkedin_login_${Date.now()}.png`;
       await page.screenshot({ path: errorScreenshot });
       if (pageIdentifier) {
         throw new Error(
-          `Could not open the post composer for LinkedIn Company Page "${pageIdentifier}". This means either the login session expired, the account lacks admin access to that Page, or the Page URL/ID is wrong. Saved screenshot to ${errorScreenshot}`
+          `Could not open the post composer for LinkedIn Company Page "${pageIdentifier}". Current URL: ${currentUrl}. This means either the login session expired, the account lacks admin access to that Page, or the Page URL/ID is wrong. Saved screenshot to ${errorScreenshot}`
         );
       }
-      throw new Error(`LinkedIn Login Session expired. Saved login error screenshot to ${errorScreenshot}`);
+      throw new Error(`LinkedIn Login Session expired. Current URL: ${currentUrl}. Saved login error screenshot to ${errorScreenshot}`);
     }
 
     console.log("👉 Opening share modal...");
