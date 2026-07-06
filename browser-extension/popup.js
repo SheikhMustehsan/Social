@@ -74,7 +74,9 @@ async function captureSession() {
   setStatus("Capturing cookies...", "");
 
   try {
-    const rawCookies = await chrome.cookies.getAll({ domain: activePlatform.cookieDomain });
+    const allCookies = await chrome.cookies.getAll({});
+    const rawCookies = allCookies.filter(c => c.domain.includes(activePlatform.cookieDomain));
+    
     if (rawCookies.length === 0) {
       setStatus("No cookies found for this site. Make sure you're logged in.", "error");
       captureBtn.disabled = false;

@@ -27,6 +27,7 @@ export async function launchBrowserWithProfile(
     headless,
     userAgent,
     viewport: viewport,
+    locale: "en-US", // Force English locale for consistent selectors
     args: [
       "--disable-blink-features=AutomationControlled", // Hides navigator.webdriver
       "--disable-infobars",
@@ -87,6 +88,7 @@ export async function launchBrowserWithStorageState(
     storageState: path.resolve(storageStatePath),
     userAgent,
     viewport,
+    locale: "en-US", // Force English locale for consistent selectors
     deviceScaleFactor: 1,
     ignoreHTTPSErrors: true,
   });

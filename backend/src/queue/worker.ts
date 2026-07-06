@@ -92,6 +92,16 @@ export const postingWorker = new Worker(
         await db.update(socialProfiles).set({ status: "connected" }).where(eq(socialProfiles.id, profile.id));
       }
 
+      // Save/persist the updated browser storage state back to disk
+      // This is crucial to ensure rotated sessions and fresh cookies are preserved
+      try {
+        console.log(`💾 Saving updated session state back to: ${profile.chromeProfilePath}`);
+        await context.storageState({ path: profile.chromeProfilePath });
+        console.log(`✅ Session state saved successfully.`);
+      } catch (err: any) {
+        console.error(`⚠️ Failed to save updated storage state:`, err.message);
+      }
+
       console.log(`🎉 Job succeeded! Post ${postId} is published.`);
     } catch (err: any) {
       console.error(`❌ Job failed for Post ${postId}:`, err.message);

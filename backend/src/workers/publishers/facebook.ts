@@ -20,40 +20,55 @@ export async function publishToFacebookSuite(
     });
     await page.waitForTimeout(5000);
 
-    // Verify login state
-    const composerTitle = page.locator("text=Create post");
-    const isComposerVisible = await composerTitle.first().isVisible();
-
-    if (!isComposerVisible) {
+    // Verify login state by waiting for the composer texteditor textbox to be visible
+    try {
+      await page.locator("[role='textbox']").first().waitFor({ state: "visible", timeout: 25000 });
+    } catch (err) {
+      const currentUrl = page.url();
       const errorScreenshot = `error_meta_login_${Date.now()}.png`;
       await page.screenshot({ path: errorScreenshot });
-      throw new Error(`Meta Business Suite session expired. Saved screenshot to ${errorScreenshot}`);
+      throw new Error(
+        `Meta Business Suite login session expired or failed to load the composer. Current URL: ${currentUrl}. Saved screenshot to ${errorScreenshot}`
+      );
     }
 
     // A single Meta login can administer many Pages, and the composer defaults to
     // whichever Page/account was last active in Business Suite. If we know the target
     // Page, explicitly switch to it via the account switcher before doing anything else.
-    // NOTE: the selectors below are a best-effort match for Business Suite's account
-    // switcher and may need adjusting to Meta's current DOM (same caveat as the other
-    // selectors in this file).
     if (pageIdentifier) {
-      console.log(`🔎 Selecting target Page: ${pageIdentifier}`);
-      const accountSwitcher = page.locator(
-        "[aria-label='Accounts'], [aria-label='Switch accounts'], div[role='button']:has-text('Switch')"
-      ).first();
-      if (await accountSwitcher.isVisible().catch(() => false)) {
-        await accountSwitcher.click();
-        await page.waitForTimeout(1000);
-        const pageOption = page.locator(`text="${pageIdentifier}"`).first();
-        if (await pageOption.isVisible().catch(() => false)) {
-          await pageOption.click();
-          await page.waitForTimeout(2000);
+      console.log(`🔎 Checking if already on target Page: ${pageIdentifier}`);
+      const alreadyOnPage = await page.locator(`text="${pageIdentifier}"`).first().isVisible().catch(() => false);
+
+      if (alreadyOnPage) {
+        console.log(`✅ Already targeting Page: ${pageIdentifier}`);
+      } else {
+        console.log(`🔎 Selecting target Page via switcher: ${pageIdentifier}`);
+        const accountSwitcher = page.locator(
+          "[aria-label='Accounts'], [aria-label='Switch accounts'], div[role='button']:has-text('Switch')"
+        ).first();
+
+        if (await accountSwitcher.isVisible().catch(() => false)) {
+          await accountSwitcher.click();
+          await page.waitForTimeout(1500);
+
+          const pageOption = page.locator(`text="${pageIdentifier}"`).first();
+          try {
+            await pageOption.waitFor({ state: "visible", timeout: 5000 });
+            await pageOption.click();
+            await page.waitForTimeout(3000);
+          } catch (e: any) {
+            console.warn(`⚠️ Target Page option "${pageIdentifier}" not found in switcher:`, e.message);
+          }
+        } else {
+          console.warn("⚠️ Account switcher button not found or not visible.");
         }
       }
 
       // Confirm the target Page name is now showing somewhere in the composer before posting.
-      const confirmedOnPage = await page.locator(`text="${pageIdentifier}"`).first().isVisible().catch(() => false);
-      if (!confirmedOnPage) {
+      try {
+        await page.locator(`text="${pageIdentifier}"`).first().waitFor({ state: "visible", timeout: 12000 });
+        console.log(`✅ Confirmed targeting Page: ${pageIdentifier}`);
+      } catch (err) {
         const errorScreenshot = `error_meta_wrong_page_${Date.now()}.png`;
         await page.screenshot({ path: errorScreenshot });
         throw new Error(

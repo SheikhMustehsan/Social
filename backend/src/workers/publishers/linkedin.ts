@@ -30,9 +30,10 @@ export async function publishToLinkedIn(
     // the personal feed's "Start a post" button - adjust to match LinkedIn's current UI
     // if this fails to find it despite valid credentials and admin access.
     const postTrigger = page.locator("button:has-text('Start a post'), button:has-text('Create a post')").first();
-    const triggerExists = await postTrigger.isVisible();
-
-    if (!triggerExists) {
+    
+    try {
+      await postTrigger.waitFor({ state: "visible", timeout: 20000 });
+    } catch (err) {
       const errorScreenshot = `error_linkedin_login_${Date.now()}.png`;
       await page.screenshot({ path: errorScreenshot });
       if (pageIdentifier) {

@@ -37,7 +37,7 @@ async function main() {
 
   console.log(`Launching Chrome for ${platform}...`);
   const browser = await chromium.launch({ headless: false });
-  const context = await browser.newContext();
+  const context = await browser.newContext({ locale: "en-US" });
   const page = await context.newPage();
   await page.goto(PLATFORM_URLS[platform]);
 
