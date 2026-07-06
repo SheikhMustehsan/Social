@@ -95,38 +95,7 @@ export async function publishToFacebookSuite(
       console.log(`✅ Confirmed targeting Page: ${pageIdentifier}`);
     }
 
-    // 1. Choose placements (FB / IG checkboxes)
-    console.log("👉 Checking placements...");
-    // Open placement dropdown if closed
-    const placementDropdown = page.locator("[aria-label='Post to']").first();
-    if (await placementDropdown.isVisible()) {
-      await placementDropdown.click();
-      await page.waitForTimeout(1000);
-    }
-
-    // Check / uncheck placements based on requirements
-    if (placements.includes("facebook")) {
-      const fbCheckbox = page.locator("text=Facebook Page").first(); // Customize based on DOM
-      if (await fbCheckbox.isVisible()) {
-        const isChecked = await fbCheckbox.getAttribute("aria-checked");
-        if (isChecked !== "true") await fbCheckbox.click();
-      }
-    }
-    if (placements.includes("instagram")) {
-      const igCheckbox = page.locator("text=Instagram").first();
-      if (await igCheckbox.isVisible()) {
-        const isChecked = await igCheckbox.getAttribute("aria-checked");
-        if (isChecked !== "true") await igCheckbox.click();
-      }
-    }
-
-    // Close placement dropdown if opened
-    if (await placementDropdown.isVisible()) {
-      await placementDropdown.click();
-      await page.waitForTimeout(1000);
-    }
-
-    // 2. Upload Media Files
+    // 1. Upload Media Files
     if (mediaPaths && mediaPaths.length > 0) {
       console.log(`📸 Uploading ${mediaPaths.length} files to Meta...`);
       // Find Add Photo button (often a file input or click trigger)
@@ -144,7 +113,7 @@ export async function publishToFacebookSuite(
       await page.waitForTimeout(8000); // Wait for upload and preview rendering
     }
 
-    // 3. Write Caption Text
+    // 2. Write Caption Text
     console.log("✏️ Writing caption to composer...");
     const textEditor = page.locator("[role='textbox']").first();
     await textEditor.waitFor({ state: "attached", timeout: 15000 });
@@ -158,7 +127,7 @@ export async function publishToFacebookSuite(
     }
     await page.waitForTimeout(3000);
 
-    // 4. Click Publish Button
+    // 3. Click Publish Button
     console.log("🚀 Publishing to Meta Page...");
     const publishBtn = page.locator("button:has-text('Publish')").first();
     await publishBtn.waitFor({ state: "visible", timeout: 5000 });
