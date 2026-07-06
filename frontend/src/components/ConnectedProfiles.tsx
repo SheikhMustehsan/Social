@@ -410,6 +410,22 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
                   ✓ {uploadedFileName} uploaded
                 </p>
               )}
+              
+              <div style={{
+                fontSize: "11px",
+                color: "#ffd2d2",
+                background: "rgba(239, 68, 68, 0.1)",
+                border: "1px solid rgba(239, 68, 68, 0.2)",
+                padding: "10px",
+                borderRadius: "4px",
+                marginTop: "12px",
+                lineHeight: "1.4"
+              }}>
+                <strong>⚠️ Token Rotation Alert:</strong> After downloading the session file, 
+                <strong> close the {platform} tab on your PC immediately</strong>. Do not use that browser profile for {platform} again. 
+                If you continue using it on your PC, the platform will rotate your session keys, which 
+                will instantly log out the server's session! Use an Incognito/Private window or a separate browser profile to capture the session.
+              </div>
             </div>
           )}
 

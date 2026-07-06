@@ -20,16 +20,14 @@ export async function publishToFacebookSuite(
     });
     await page.waitForTimeout(5000);
 
-    // Verify login state by waiting for the composer texteditor textbox to be visible
-    try {
-      await page.locator("[role='textbox']").first().waitFor({ state: "visible", timeout: 25000 });
-    } catch (err) {
-      const currentUrl = page.url();
+    // Verify login state
+    await page.waitForLoadState("domcontentloaded");
+    await page.waitForTimeout(5000); // Give it a moment to resolve any redirects
+    const currentUrl = page.url();
+    if (currentUrl.includes("login") || currentUrl.includes("signin") || currentUrl.includes("loginpage")) {
       const errorScreenshot = `error_meta_login_${Date.now()}.png`;
       await page.screenshot({ path: errorScreenshot });
-      throw new Error(
-        `Meta Business Suite login session expired or failed to load the composer. Current URL: ${currentUrl}. Saved screenshot to ${errorScreenshot}`
-      );
+      throw new Error(`Meta Business Suite session expired. Redirected to login: ${currentUrl}. Saved screenshot to ${errorScreenshot}`);
     }
 
     // A single Meta login can administer many Pages, and the composer defaults to
@@ -130,6 +128,8 @@ export async function publishToFacebookSuite(
     // 3. Write Caption Text
     console.log("✏️ Writing caption to composer...");
     const textEditor = page.locator("[role='textbox']").first();
+    await textEditor.waitFor({ state: "attached", timeout: 15000 });
+    await textEditor.scrollIntoViewIfNeeded();
     await textEditor.waitFor({ state: "visible", timeout: 5000 });
     await textEditor.focus();
 
