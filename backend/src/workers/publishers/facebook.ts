@@ -30,53 +30,69 @@ export async function publishToFacebookSuite(
       throw new Error(`Meta Business Suite session expired. Redirected to login: ${currentUrl}. Saved screenshot to ${errorScreenshot}`);
     }
 
-    // A single Meta login can administer many Pages, and the composer defaults to
-    // whichever Page/account was last active in Business Suite. If we know the target
-    // Page, explicitly switch to it via the account switcher before doing anything else.
+    // A single Meta login can administer many Pages. The composer's "Post to" field is a
+    // combobox (div[role="combobox"]) that opens a checklist of div[role="option"] entries
+    // (one per Page/Instagram account), where selection state is exposed via aria-selected
+    // on the option itself - NOT a child checkbox. Clicking an option TOGGLES it, so an
+    // already-selected option must be left alone (clicking it would deselect it).
+    // Verified directly against a live Business Suite session - if Meta changes this UI,
+    // these selectors will need updating.
     if (pageIdentifier) {
       console.log(`🔎 Selecting target Page: ${pageIdentifier}`);
-      
-      const accountSwitcher = page.locator(
-        "[aria-label='Business Account'], [aria-label='Accounts'], [aria-label='Switch accounts'], div[role='button']:has-text('Switch')"
-      ).first();
+
+      const postToCombobox = page.locator('div[role="combobox"]').first();
 
       try {
-        // Wait for switcher to be attached (loaded in DOM) and click it
-        await accountSwitcher.waitFor({ state: "attached", timeout: 25000 });
-        await accountSwitcher.click();
-        await page.waitForTimeout(2000);
+        await postToCombobox.waitFor({ state: "visible", timeout: 15000 });
+        await postToCombobox.click();
+        await page.waitForTimeout(1500);
 
-        // Target the specific option inside the visible dropdown menu
-        const pageOption = page.locator([
-          `[role="menu"] text="${pageIdentifier}"`,
-          `[role="listbox"] text="${pageIdentifier}"`,
-          `[role="dialog"] text="${pageIdentifier}"`,
-          `text="${pageIdentifier}"`
-        ].join(", ")).locator("visible=true").first();
+        const options = page.locator('[role="option"]');
+        const optionCount = await options.count();
+        let targetFound = false;
 
-        await pageOption.waitFor({ state: "visible", timeout: 12000 });
-        await pageOption.click();
-        console.log(`✅ Clicked Page switcher option for: ${pageIdentifier}`);
-        await page.waitForTimeout(4000);
+        for (let i = 0; i < optionCount; i++) {
+          const option = options.nth(i);
+          const text = (await option.textContent().catch(() => "")) || "";
+          const isSelected = (await option.getAttribute("aria-selected")) === "true";
+          const isTarget = text.includes(pageIdentifier);
+
+          if (isTarget) targetFound = true;
+
+          // Select the target if it isn't already; deselect anything else that is
+          // selected so the post only goes to the intended Page.
+          if (isTarget !== isSelected) {
+            await option.click();
+            await page.waitForTimeout(800);
+          }
+        }
+
+        if (!targetFound) {
+          throw new Error(`No option matching "${pageIdentifier}" found in the "Post to" dropdown`);
+        }
+
+        // Close the dropdown so the combobox label re-renders with the final selection.
+        await postToCombobox.click();
+        await page.waitForTimeout(1500);
+        console.log(`✅ Selected Page: ${pageIdentifier}`);
       } catch (err: any) {
-        console.log(`⚠️ Switcher not found or failed to select page: ${err.message}. Proceeding with active selection...`);
-      }
-
-      // Confirm the target Page name is now showing somewhere in the composer workspace before posting.
-      try {
-        // Look for page name in main header/composer view
-        const composerHeader = page.locator(
-          `[role='main']:has-text("${pageIdentifier}"), .composer-header:has-text("${pageIdentifier}"), text="${pageIdentifier}"`
-        ).first();
-        await composerHeader.waitFor({ state: "visible", timeout: 15000 });
-        console.log(`✅ Confirmed targeting Page: ${pageIdentifier}`);
-      } catch (err) {
         const errorScreenshot = `error_meta_wrong_page_${Date.now()}.png`;
         await page.screenshot({ path: errorScreenshot });
         throw new Error(
-          `Could not confirm the composer is targeting Page "${pageIdentifier}". Saved screenshot to ${errorScreenshot}. Refusing to post to avoid publishing to the wrong Page.`
+          `Could not select Page "${pageIdentifier}" in the "Post to" dropdown: ${err.message}. Saved screenshot to ${errorScreenshot}. Refusing to post to avoid publishing to the wrong Page.`
         );
       }
+
+      // Confirm the combobox now actually displays the target Page before posting.
+      const comboboxText = (await postToCombobox.textContent().catch(() => "")) || "";
+      if (!comboboxText.includes(pageIdentifier)) {
+        const errorScreenshot = `error_meta_wrong_page_${Date.now()}.png`;
+        await page.screenshot({ path: errorScreenshot });
+        throw new Error(
+          `"Post to" still shows "${comboboxText.trim()}", not "${pageIdentifier}". Saved screenshot to ${errorScreenshot}. Refusing to post to avoid publishing to the wrong Page.`
+        );
+      }
+      console.log(`✅ Confirmed targeting Page: ${pageIdentifier}`);
     }
 
     // 1. Choose placements (FB / IG checkboxes)
