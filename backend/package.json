@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "capture-session": "tsx scripts/captureSession.ts"
   },
   "keywords": [],
   "author": "",

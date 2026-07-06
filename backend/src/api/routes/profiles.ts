@@ -135,6 +135,58 @@ export async function profileRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // 0.2 UPLOAD A SESSION FILE CAPTURED LOCALLY (Admin Only)
+  // This server has no display of its own, so a headed browser login can't run here.
+  // Instead, an admin logs in on their own machine (via scripts/captureSession.ts), which
+  // saves a Playwright storageState (cookies + localStorage) as JSON, and uploads it here.
+  fastify.post("/upload-session", { preHandler: [authorizeCompanyAdmin] }, async (request, reply) => {
+    if (!request.isMultipart()) {
+      return reply.status(400).send({ error: "Request is not multipart. Please upload the session file as multipart/form-data." });
+    }
+
+    try {
+      const data = await request.file();
+      if (!data) {
+        return reply.status(400).send({ error: "No session file was uploaded." });
+      }
+
+      const sessionsDir = path.join(process.cwd(), "data", "sessions");
+      if (!fs.existsSync(sessionsDir)) {
+        fs.mkdirSync(sessionsDir, { recursive: true });
+      }
+
+      const destPath = path.join(sessionsDir, `session_${crypto.randomUUID()}.json`);
+      const writeStream = fs.createWriteStream(destPath);
+
+      await new Promise<void>((resolve, reject) => {
+        data.file.pipe(writeStream);
+        data.file.on("end", resolve);
+        data.file.on("error", (err) => {
+          writeStream.destroy();
+          reject(err);
+        });
+      });
+
+      // Sanity check: make sure this is actually a storageState JSON, not a random file
+      try {
+        const parsed = JSON.parse(fs.readFileSync(destPath, "utf-8"));
+        if (!parsed || !Array.isArray(parsed.cookies)) {
+          fs.unlinkSync(destPath);
+          return reply.status(400).send({ error: "That file doesn't look like a valid session export (missing 'cookies' array)." });
+        }
+      } catch {
+        fs.unlinkSync(destPath);
+        return reply.status(400).send({ error: "Uploaded file is not valid JSON. Make sure you're uploading the file saved by captureSession.ts." });
+      }
+
+      console.log(`📥 Session file uploaded and saved to: ${destPath}`);
+      return reply.send({ sessionPath: destPath });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Failed to save uploaded session file." });
+    }
+  });
+
   // 1. CONNECT / ADD A NEW SOCIAL PROFILE (Admin Only)
   fastify.post("/", { preHandler: [authorizeCompanyAdmin] }, async (request, reply) => {
     const companyId = request.headers["x-company-id"] as string;

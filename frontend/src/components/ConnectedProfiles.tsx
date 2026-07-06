@@ -37,7 +37,13 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
   const [success, setSuccess] = useState("");
 
   const needsTargetPage = platform === "facebook" || platform === "linkedin";
-  
+
+  // Session file upload (primary flow - the server has no display, so login happens
+  // locally via scripts/captureSession.ts and the resulting session file is uploaded here)
+  const [uploadedSessionPath, setUploadedSessionPath] = useState("");
+  const [uploadedFileName, setUploadedFileName] = useState("");
+  const [uploadingSession, setUploadingSession] = useState(false);
+
   const [launchingBrowser, setLaunchingBrowser] = useState(false);
   const [browserLaunchedMessage, setBrowserLaunchedMessage] = useState("");
 
@@ -134,6 +140,43 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
     }
   };
 
+  const handleSessionFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setError("");
+    setSuccess("");
+    setUploadingSession(true);
+    setUploadedSessionPath("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/profiles/upload-session`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "x-company-id": companyId,
+        },
+        body: formData,
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setUploadedSessionPath(data.sessionPath);
+        setUploadedFileName(file.name);
+      } else {
+        setError(data.error || "Failed to upload session file");
+      }
+    } catch (err) {
+      setError("Network error uploading session file");
+    } finally {
+      setUploadingSession(false);
+      e.target.value = "";
+    }
+  };
+
   const saveProfile = async (resolvedPath: string) => {
     if (!profileName.trim()) {
       setError("Please enter a Profile Label first.");
@@ -171,6 +214,8 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
         setProfileName("");
         setChromeProfilePath("");
         setTargetPageId("");
+        setUploadedSessionPath("");
+        setUploadedFileName("");
         fetchProfiles();
       } else {
         setError(data.error || "Failed to link profile");
@@ -206,8 +251,11 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
       }
       await saveProfile(chromeProfilePath);
     } else {
-      // Launch browser and link automatically
-      await handleLaunchBrowser();
+      if (!uploadedSessionPath) {
+        setError("Please upload a session file captured via 'npm run capture-session' first.");
+        return;
+      }
+      await saveProfile(uploadedSessionPath);
     }
   };
 
@@ -258,7 +306,8 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
         <div className="glass-panel" style={{ padding: "24px", height: "fit-content" }}>
         <h3>Link Social Account</h3>
         <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: "8px 0 20px" }}>
-          Authenticate a new social profile directly on this server to publish posts natively.
+          This server has no display, so it can't show you a login window. Log in once on your
+          own computer, then upload the resulting session file here.
         </p>
 
         {error && <div className="auth-error-message">{error}</div>}
@@ -332,6 +381,34 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
             </div>
           )}
 
+          {/* Session file upload (primary flow) */}
+          {!useCustomPath && (
+            <div className="form-group" style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
+              <label className="glass-label">Session File</label>
+              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "8px", lineHeight: "1.5" }}>
+                On a computer with a browser (e.g. your own PC), run{" "}
+                <code>cd backend &amp;&amp; npm run capture-session -- {platform}</code>, log in when
+                Chrome opens, then press Enter in that terminal. Upload the generated{" "}
+                <code>session_*.json</code> file below.
+              </p>
+              <input
+                type="file"
+                accept=".json,application/json"
+                onChange={handleSessionFileChange}
+                disabled={uploadingSession}
+                className="glass-input"
+              />
+              {uploadingSession && (
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "6px" }}>Uploading...</p>
+              )}
+              {uploadedFileName && !uploadingSession && (
+                <p style={{ fontSize: "12px", color: "var(--color-success)", marginTop: "6px" }}>
+                  ✓ {uploadedFileName} uploaded
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Advanced Path Selector (Hidden by default) */}
           {useCustomPath && (
             <div className="form-group" style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
@@ -379,13 +456,13 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
 
           {/* Action Trigger */}
           {!useCustomPath ? (
-            <button 
-              type="submit" 
-              className="glass-button primary animate-pulse" 
+            <button
+              type="submit"
+              className="glass-button primary animate-pulse"
               style={{ justifyContent: "center", marginTop: "8px" }}
-              disabled={launchingBrowser}
+              disabled={uploadingSession || !uploadedSessionPath}
             >
-              🚀 {launchingBrowser ? "Authenticating in Browser..." : "Authenticate & Link Channel"}
+              🚀 Link Channel
             </button>
           ) : (
             <button 
@@ -434,7 +511,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
                 fontWeight: 600
               }}
             >
-              {useCustomPath ? "← Use simple automated setup" : "⚙️ Advanced options (custom profile path)"}
+              {useCustomPath ? "← Use session file upload (recommended)" : "⚙️ Legacy: auto-launch browser on this server (only works if it has a display)"}
             </button>
           </div>
         </form>
@@ -491,7 +568,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
                     </p>
                   )}
                   <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px", maxWidth: "400px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    Path: {p.chromeProfilePath}
+                    Session: {p.chromeProfilePath}
                   </p>
                 </div>
 

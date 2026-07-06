@@ -2,13 +2,11 @@ import { Worker, Job } from "bullmq";
 import { db } from "../db/db.js";
 import { posts, socialProfiles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { syncChromeProfile } from "../workers/utils/profileSync.js";
-import { launchBrowserWithProfile } from "../workers/utils/browserLauncher.js";
+import { launchBrowserWithStorageState } from "../workers/utils/browserLauncher.js";
 import { publishToFacebookSuite } from "../workers/publishers/facebook.js";
 import { publishToLinkedIn } from "../workers/publishers/linkedin.js";
 import { publishToTikTok } from "../workers/publishers/tiktok.js";
 import { connection } from "./queue.js";
-import path from "path";
 import fs from "fs";
 
 interface JobData {
@@ -48,22 +46,26 @@ export const postingWorker = new Worker(
     // Update status to publishing
     await db.update(posts).set({ status: "publishing" }).where(eq(posts.id, postId));
 
-    // Create an isolated temporary directory path for this running browser context
-    // This avoids locks if we post to multiple networks or run browsers in parallel.
-    const tempProfilePath = path.resolve(`./data/profiles/running_${postId}`);
+    // The server has no display of its own, so profiles are linked via an uploaded
+    // Playwright storageState (cookies + localStorage) captured on a machine that does
+    // have a display, rather than a live Chrome user-data-dir synced from this machine.
+    if (!fs.existsSync(profile.chromeProfilePath)) {
+      const err = new Error(
+        `Session file not found on server: ${profile.chromeProfilePath}. Please re-link this profile by uploading a fresh session file.`
+      );
+      await db.update(posts).set({ status: "failed", errorMessage: err.message }).where(eq(posts.id, postId));
+      await db.update(socialProfiles).set({ status: "error" }).where(eq(socialProfiles.id, profile.id));
+      throw err;
+    }
+
+    const context = await launchBrowserWithStorageState(profile.chromeProfilePath, {
+      headless: true, // Set to false to debug/watch the posting locally (requires a display)
+    });
 
     try {
-      // 2. Synchronize Chrome Session Profile
-      syncChromeProfile(profile.chromeProfilePath, tempProfilePath);
-
-      // 3. Launch Persistent Playwright Browser Context
-      const context = await launchBrowserWithProfile(tempProfilePath, {
-        headless: true, // Set to false to debug/watch the posting locally
-      });
-
-      // 4. Dispatch to correct Platform Publisher
+      // 2. Dispatch to correct Platform Publisher
       const mediaList = post.mediaUrls as string[];
-      
+
       if (profile.platform === "facebook" || profile.platform === "instagram") {
         const platformKey = profile.platform as "facebook" | "instagram";
         await publishToFacebookSuite(context, post.caption || "", mediaList, [platformKey], profile.profileId || undefined);
@@ -78,8 +80,7 @@ export const postingWorker = new Worker(
         throw new Error(`Unsupported platform type: ${profile.platform}`);
       }
 
-      // 5. Success cleanup and database update
-      await context.close();
+      // 3. Success database update
       await db.update(posts).set({
         status: "published",
         publishedAt: new Date(),
@@ -102,21 +103,14 @@ export const postingWorker = new Worker(
       }).where(eq(posts.id, postId));
 
       // Flag the profile itself so Connected Profiles stops showing a stale "connected" badge
-      if (/session expired/i.test(err.message || "")) {
+      if (/session expired|login session/i.test(err.message || "")) {
         await db.update(socialProfiles).set({ status: "error" }).where(eq(socialProfiles.id, profile.id));
       }
 
       throw err; // Rethrow to let BullMQ handle attempts/backoff
     } finally {
-      // Always cleanup temporary browser profiles to save Linux disk space
-      if (fs.existsSync(tempProfilePath)) {
-        try {
-          fs.rmSync(tempProfilePath, { recursive: true, force: true });
-          console.log(`🧹 Cleaned up temporary profile workspace: ${tempProfilePath}`);
-        } catch (cleanupErr) {
-          console.error(`[WARN] Failed to delete temp workspace ${tempProfilePath}:`, cleanupErr);
-        }
-      }
+      // Closing the context also closes the underlying browser (see browserLauncher.ts)
+      await context.close().catch(() => {});
     }
   },
   {
