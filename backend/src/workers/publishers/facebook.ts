@@ -37,7 +37,7 @@ export async function publishToFacebookSuite(
       console.log(`🔎 Selecting target Page: ${pageIdentifier}`);
       
       const accountSwitcher = page.locator(
-        "[aria-label='Accounts'], [aria-label='Switch accounts'], div[role='button']:has-text('Switch')"
+        "[aria-label='Business Account'], [aria-label='Accounts'], [aria-label='Switch accounts'], div[role='button']:has-text('Switch')"
       ).first();
 
       try {
