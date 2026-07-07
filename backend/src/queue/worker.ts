@@ -61,9 +61,12 @@ export const postingWorker = new Worker(
     const isDirectory = fs.lstatSync(profile.chromeProfilePath).isDirectory();
     console.log(`🚀 Loading browser context using: ${isDirectory ? "Persistent User Data Profile" : "Storage State JSON"}`);
 
+    // Route headed Chromium display output to our permanent server Xvfb framebuffer daemon
+    process.env.DISPLAY = ":99";
+
     const context = isDirectory
-      ? await launchBrowserWithProfile(profile.chromeProfilePath, { headless: true })
-      : await launchBrowserWithStorageState(profile.chromeProfilePath, { headless: true });
+      ? await launchBrowserWithProfile(profile.chromeProfilePath, { headless: false })
+      : await launchBrowserWithStorageState(profile.chromeProfilePath, { headless: false });
 
     try {
       // 2. Dispatch to correct Platform Publisher
