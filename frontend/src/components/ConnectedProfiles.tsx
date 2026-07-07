@@ -397,7 +397,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
               </p>
               <input
                 type="file"
-                accept=".json,application/json"
+                accept=".json,.zip,application/json,application/zip,application/x-zip-compressed"
                 onChange={handleSessionFileChange}
                 disabled={uploadingSession}
                 className="glass-input"
@@ -413,18 +413,31 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
               
               <div style={{
                 fontSize: "11px",
-                color: "#ffd2d2",
-                background: "rgba(239, 68, 68, 0.1)",
-                border: "1px solid rgba(239, 68, 68, 0.2)",
-                padding: "10px",
-                borderRadius: "4px",
-                marginTop: "12px",
-                lineHeight: "1.4"
+                color: "#e2e8f0",
+                background: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid var(--border-color)",
+                padding: "14px",
+                borderRadius: "6px",
+                marginTop: "14px",
+                lineHeight: "1.5"
               }}>
-                <strong>⚠️ Token Rotation Alert:</strong> After downloading the session file, 
-                <strong> close the {platform} tab on your PC immediately</strong>. Do not use that browser profile for {platform} again. 
-                If you continue using it on your PC, the platform will rotate your session keys, which 
-                will instantly log out the server's session! Use an Incognito/Private window or a separate browser profile to capture the session.
+                <div style={{ fontWeight: "bold", color: "#60a5fa", marginBottom: "6px" }}>
+                  💡 Permanent Solution for LinkedIn & Facebook (Browser Profile Upload):
+                </div>
+                To bypass device-binding and IP-fingerprint blocks completely, you can upload your entire Chrome browser profile as a <strong>.zip</strong> archive instead of a JSON file:
+                <ol style={{ paddingLeft: "16px", margin: "6px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <li>Create a <strong>new browser profile</strong> in Google Chrome.</li>
+                  <li>Log in to {platform} and navigate to your dashboard/page.</li>
+                  <li><strong>Close Chrome completely</strong> so it flushes all session files to disk.</li>
+                  <li>Locate the profile folder on your PC:
+                    <br />• <u>Windows:</u> <code>%LOCALAPPDATA%\Google\Chrome\User Data\&lt;Profile Name&gt;</code> (e.g. <code>Profile 1</code>)
+                    <br />• <u>macOS:</u> <code>~/Library/Application Support/Google/Chrome/&lt;Profile Name&gt;</code>
+                  </li>
+                  <li>Right-click that profile folder, select <strong>Compress to ZIP file</strong>, and upload it here.</li>
+                </ol>
+                <span style={{ color: "var(--text-muted)", fontSize: "10px" }}>
+                  * This sets up a permanent persistent browser state on the server that never conflicts with your active PC browser sessions.
+                </span>
               </div>
             </div>
           )}

@@ -2,7 +2,7 @@ import { Worker, Job } from "bullmq";
 import { db } from "../db/db.js";
 import { posts, socialProfiles } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { launchBrowserWithStorageState } from "../workers/utils/browserLauncher.js";
+import { launchBrowserWithStorageState, launchBrowserWithProfile } from "../workers/utils/browserLauncher.js";
 import { publishToFacebookSuite } from "../workers/publishers/facebook.js";
 import { publishToLinkedIn } from "../workers/publishers/linkedin.js";
 import { publishToTikTok } from "../workers/publishers/tiktok.js";
@@ -58,9 +58,12 @@ export const postingWorker = new Worker(
       throw err;
     }
 
-    const context = await launchBrowserWithStorageState(profile.chromeProfilePath, {
-      headless: true, // Set to false to debug/watch the posting locally (requires a display)
-    });
+    const isDirectory = fs.lstatSync(profile.chromeProfilePath).isDirectory();
+    console.log(`🚀 Loading browser context using: ${isDirectory ? "Persistent User Data Profile" : "Storage State JSON"}`);
+
+    const context = isDirectory
+      ? await launchBrowserWithProfile(profile.chromeProfilePath, { headless: true })
+      : await launchBrowserWithStorageState(profile.chromeProfilePath, { headless: true });
 
     try {
       // 2. Dispatch to correct Platform Publisher
@@ -92,14 +95,18 @@ export const postingWorker = new Worker(
         await db.update(socialProfiles).set({ status: "connected" }).where(eq(socialProfiles.id, profile.id));
       }
 
-      // Save/persist the updated browser storage state back to disk
-      // This is crucial to ensure rotated sessions and fresh cookies are preserved
-      try {
-        console.log(`💾 Saving updated session state back to: ${profile.chromeProfilePath}`);
-        await context.storageState({ path: profile.chromeProfilePath });
-        console.log(`✅ Session state saved successfully.`);
-      } catch (err: any) {
-        console.error(`⚠️ Failed to save updated storage state:`, err.message);
+      // Save/persist the updated browser storage state back to disk (only for JSON storageState profiles)
+      // Persistent browser profiles automatically save cookies to disk in real-time
+      if (!isDirectory) {
+        try {
+          console.log(`💾 Saving updated session state back to: ${profile.chromeProfilePath}`);
+          await context.storageState({ path: profile.chromeProfilePath });
+          console.log(`✅ Session state saved successfully.`);
+        } catch (err: any) {
+          console.error(`⚠️ Failed to save updated storage state:`, err.message);
+        }
+      } else {
+        console.log(`💾 Persistent profile handles its own session state storage natively.`);
       }
 
       console.log(`🎉 Job succeeded! Post ${postId} is published.`);

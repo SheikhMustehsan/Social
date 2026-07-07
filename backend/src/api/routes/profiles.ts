@@ -155,14 +155,14 @@ export async function profileRoutes(fastify: FastifyInstance) {
         fs.mkdirSync(sessionsDir, { recursive: true });
       }
 
-      const destPath = path.join(sessionsDir, `session_${crypto.randomUUID()}.json`);
+      const isZip = data.filename.toLowerCase().endsWith(".zip");
+      const uuid = crypto.randomUUID();
+      const tempFilename = isZip ? `session_${uuid}.zip` : `session_${uuid}.json`;
+      const destPath = path.join(sessionsDir, tempFilename);
       const writeStream = fs.createWriteStream(destPath);
 
       await new Promise<void>((resolve, reject) => {
         data.file.pipe(writeStream);
-        // Wait for the write stream to actually flush to disk, not just the source
-        // stream to finish emitting - reading the file back before this resolves
-        // can see a truncated/empty file.
         writeStream.on("finish", resolve);
         writeStream.on("error", reject);
         data.file.on("error", (err) => {
@@ -171,20 +171,42 @@ export async function profileRoutes(fastify: FastifyInstance) {
         });
       });
 
-      // Sanity check: make sure this is actually a storageState JSON, not a random file
-      try {
-        const parsed = JSON.parse(fs.readFileSync(destPath, "utf-8"));
-        if (!parsed || !Array.isArray(parsed.cookies)) {
-          fs.unlinkSync(destPath);
-          return reply.status(400).send({ error: "That file doesn't look like a valid session export (missing 'cookies' array)." });
-        }
-      } catch {
-        fs.unlinkSync(destPath);
-        return reply.status(400).send({ error: "Uploaded file is not valid JSON. Make sure you're uploading the file saved by captureSession.ts." });
-      }
+      if (isZip) {
+        const extractDir = path.join(sessionsDir, `session_${uuid}`);
+        fs.mkdirSync(extractDir, { recursive: true });
 
-      console.log(`📥 Session file uploaded and saved to: ${destPath}`);
-      return reply.send({ sessionPath: destPath });
+        try {
+          const { execSync } = await import("child_process");
+          console.log(`📦 Unzipping profile archive to: ${extractDir}`);
+          // Extract using native Linux unzip command
+          execSync(`unzip -o "${destPath}" -d "${extractDir}"`);
+          console.log(`✅ Unzipped successfully.`);
+          
+          // Delete temp zip
+          fs.unlinkSync(destPath);
+          return reply.send({ sessionPath: extractDir });
+        } catch (err: any) {
+          console.error("❌ Failed to unzip profile:", err.message);
+          try { fs.unlinkSync(destPath); } catch {}
+          try { fs.rmSync(extractDir, { recursive: true, force: true }); } catch {}
+          return reply.status(400).send({ error: "Failed to unzip the uploaded browser profile: " + err.message });
+        }
+      } else {
+        // Sanity check: make sure this is actually a storageState JSON, not a random file
+        try {
+          const parsed = JSON.parse(fs.readFileSync(destPath, "utf-8"));
+          if (!parsed || !Array.isArray(parsed.cookies)) {
+            fs.unlinkSync(destPath);
+            return reply.status(400).send({ error: "That file doesn't look like a valid session export (missing 'cookies' array)." });
+          }
+        } catch {
+          fs.unlinkSync(destPath);
+          return reply.status(400).send({ error: "Uploaded file is not valid JSON. Make sure you're uploading the file saved by captureSession.ts." });
+        }
+
+        console.log(`📥 Session file uploaded and saved to: ${destPath}`);
+        return reply.send({ sessionPath: destPath });
+      }
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({ error: "Failed to save uploaded session file." });
