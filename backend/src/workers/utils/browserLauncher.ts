@@ -7,6 +7,9 @@ export interface LauncherOptions {
   viewport?: { width: number; height: number } | null;
 }
 
+import fs from "fs";
+declare const navigator: any;
+
 export async function launchBrowserWithProfile(
   profileDir: string,
   options: LauncherOptions = {}
@@ -23,21 +26,76 @@ export async function launchBrowserWithProfile(
 
   console.log(`🚀 Launching Playwright browser with profile: ${resolvedProfilePath} (headless: ${headless})`);
 
+  let targetProfile = "Default";
+  const args = [
+    "--disable-blink-features=AutomationControlled", // Hides navigator.webdriver
+    "--disable-infobars",
+    "--start-maximized",
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-web-security", // Bypasses CORS issues in scrapers
+    "--allow-running-insecure-content",
+  ];
+
+  if (fs.existsSync(resolvedProfilePath)) {
+    // If they zipped the profile folder directly (so cookies/Network is at the root),
+    // move everything into a Default/ subdirectory so Playwright finds it.
+    const defaultDir = path.join(resolvedProfilePath, "Default");
+    const hasNetwork = fs.existsSync(path.join(resolvedProfilePath, "Network"));
+    const hasCookies = fs.existsSync(path.join(resolvedProfilePath, "Cookies"));
+    if ((hasNetwork || hasCookies) && !fs.existsSync(defaultDir)) {
+      console.log("📂 Restructuring profile: Moving files into 'Default' subdirectory for Playwright...");
+      fs.mkdirSync(defaultDir, { recursive: true });
+      const items = fs.readdirSync(resolvedProfilePath);
+      for (const item of items) {
+        if (item === "Default") continue;
+        const src = path.join(resolvedProfilePath, item);
+        const dest = path.join(defaultDir, item);
+        try {
+          fs.renameSync(src, dest);
+        } catch (e: any) {
+          console.warn(`⚠️ Failed to move ${item}:`, e.message);
+        }
+      }
+    }
+
+    const items = fs.readdirSync(resolvedProfilePath);
+    const possibleProfiles = items.filter(item => {
+      try {
+        return (item === "Default" || item.startsWith("Profile ")) && 
+               fs.lstatSync(path.join(resolvedProfilePath, item)).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+
+    let maxCookieSize = 0;
+    for (const p of possibleProfiles) {
+      const cookiePath1 = path.join(resolvedProfilePath, p, "Network", "Cookies");
+      const cookiePath2 = path.join(resolvedProfilePath, p, "Cookies");
+      let size = 0;
+      if (fs.existsSync(cookiePath1)) {
+        size = fs.statSync(cookiePath1).size;
+      } else if (fs.existsSync(cookiePath2)) {
+        size = fs.statSync(cookiePath2).size;
+      }
+      if (size > maxCookieSize) {
+        maxCookieSize = size;
+        targetProfile = p;
+      }
+    }
+  }
+
+  console.log(`👤 Selected profile directory with active session: ${targetProfile}`);
+  args.push(`--profile-directory=${targetProfile}`);
+
   const context = await chromium.launchPersistentContext(resolvedProfilePath, {
     headless,
     userAgent,
     viewport: viewport,
     locale: "en-US", // Force English locale for consistent selectors
-    args: [
-      "--disable-blink-features=AutomationControlled", // Hides navigator.webdriver
-      "--disable-infobars",
-      "--start-maximized",
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-web-security", // Bypasses CORS issues in scrapers
-      "--allow-running-insecure-content",
-    ],
+    args,
     // Force device scale factor to look normal
     deviceScaleFactor: 1,
     ignoreHTTPSErrors: true,
