@@ -16,7 +16,7 @@ if (!igExists) {
   db.prepare(`
     INSERT INTO social_profiles (id, company_id, platform, profile_name, profile_id, chrome_profile_path, status, created_at)
     VALUES (?, ?, 'instagram', 'Buzzin Tech', 'Buzzin Tech', '/home/dccdev/Social/backend/data/sessions/server_profile_instagram', 'connected', ?)
-  `).run(igId, Math.floor(Date.now() / 1000));
+  `).run(igId, companyId, Math.floor(Date.now() / 1000));
   console.log("✅ Inserted Instagram profile!");
 } else {
   console.log("ℹ️ Instagram profile already exists.");
@@ -29,7 +29,7 @@ if (!liExists) {
   db.prepare(`
     INSERT INTO social_profiles (id, company_id, platform, profile_name, profile_id, chrome_profile_path, status, created_at)
     VALUES (?, ?, 'linkedin', 'Buzzin Tech', 'https://www.linkedin.com/company/31184548', '/home/dccdev/Social/backend/data/sessions/server_profile_linkedin', 'connected', ?)
-  `).run(liId, Math.floor(Date.now() / 1000));
+  `).run(liId, companyId, Math.floor(Date.now() / 1000));
   console.log("✅ Inserted LinkedIn profile!");
 } else {
   console.log("ℹ️ LinkedIn profile already exists.");
