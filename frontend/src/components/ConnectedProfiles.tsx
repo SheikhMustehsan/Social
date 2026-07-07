@@ -46,6 +46,24 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
 
   const [launchingBrowser, setLaunchingBrowser] = useState(false);
   const [browserLaunchedMessage, setBrowserLaunchedMessage] = useState("");
+  const [sessionSource, setSessionSource] = useState<"upload" | "reuse">("upload");
+
+  // Get unique uploaded sessions from currently linked profiles
+  const reusableSessions = (() => {
+    const seen = new Set<string>();
+    const list: { name: string; platform: string; path: string }[] = [];
+    for (const p of profiles) {
+      if (p.chromeProfilePath && !seen.has(p.chromeProfilePath)) {
+        seen.add(p.chromeProfilePath);
+        list.push({
+          name: p.profileName,
+          platform: p.platform,
+          path: p.chromeProfilePath
+        });
+      }
+    }
+    return list;
+  })();
 
   useEffect(() => {
     if (companyId) {
@@ -251,11 +269,19 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
       }
       await saveProfile(chromeProfilePath);
     } else {
-      if (!uploadedSessionPath) {
-        setError("Please upload a session file first (capture it with the browser extension, or 'npm run capture-session').");
-        return;
+      if (sessionSource === "reuse") {
+        if (!chromeProfilePath) {
+          setError("Please select an existing session to reuse.");
+          return;
+        }
+        await saveProfile(chromeProfilePath);
+      } else {
+        if (!uploadedSessionPath) {
+          setError("Please upload a session file first (capture it with the browser extension, or 'npm run capture-session').");
+          return;
+        }
+        await saveProfile(uploadedSessionPath);
       }
-      await saveProfile(uploadedSessionPath);
     }
   };
 
@@ -381,9 +407,66 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
             </div>
           )}
 
-          {/* Session file upload (primary flow) */}
-          {!useCustomPath && (
+          {/* Session source toggle (only show if reusable sessions exist) */}
+          {!useCustomPath && reusableSessions.length > 0 && (
             <div className="form-group" style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
+              <label className="glass-label">Session Source</label>
+              <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
+                  <input
+                    type="radio"
+                    name="sessionSource"
+                    checked={sessionSource === "upload"}
+                    onChange={() => {
+                      setSessionSource("upload");
+                      setChromeProfilePath("");
+                    }}
+                  />
+                  Upload a new file or ZIP
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
+                  <input
+                    type="radio"
+                    name="sessionSource"
+                    checked={sessionSource === "reuse"}
+                    onChange={() => {
+                      setSessionSource("reuse");
+                      if (reusableSessions.length > 0) {
+                        setChromeProfilePath(reusableSessions[0].path);
+                      }
+                    }}
+                  />
+                  Reuse an existing session
+                </label>
+              </div>
+            </div>
+          )}
+
+          {/* 1. Reuse existing session path dropdown */}
+          {!useCustomPath && sessionSource === "reuse" && reusableSessions.length > 0 && (
+            <div className="form-group" style={{ borderTop: sessionSource === "reuse" ? "none" : "1px solid var(--border-color)", paddingTop: "12px" }}>
+              <label className="glass-label">Select Reusable Profile Session</label>
+              <select
+                value={chromeProfilePath}
+                onChange={(e) => setChromeProfilePath(e.target.value)}
+                className="glass-input"
+                style={{ background: "rgba(0,0,0,0.2)" }}
+              >
+                {reusableSessions.map((s, idx) => (
+                  <option key={idx} value={s.path}>
+                    {s.name} ({s.platform === "facebook" ? "Facebook" : s.platform === "linkedin" ? "LinkedIn" : s.platform})
+                  </option>
+                ))}
+              </select>
+              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px" }}>
+                This will link the new profile to the same browser session folder on the server. You don't need to re-upload the ZIP file.
+              </p>
+            </div>
+          )}
+
+          {/* 2. Session file upload (primary flow) */}
+          {!useCustomPath && sessionSource === "upload" && (
+            <div className="form-group" style={{ borderTop: reusableSessions.length > 0 ? "none" : "1px solid var(--border-color)", paddingTop: "12px" }}>
               <label className="glass-label">Session File</label>
               <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "8px", lineHeight: "1.5" }}>
                 <strong>No code needed:</strong> install the Session Capture browser extension
