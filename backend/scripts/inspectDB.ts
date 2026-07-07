@@ -3,5 +3,5 @@ import path from 'path';
 
 const dbPath = path.resolve('./sqlite.db');
 const db = new Database(dbPath);
-const profiles = db.prepare("SELECT * FROM social_profiles").all();
-console.log("SOCIAL PROFILES:", JSON.stringify(profiles, null, 2));
+const posts = db.prepare("SELECT id, caption, status, error_message, created_at FROM posts ORDER BY created_at DESC LIMIT 5").all();
+console.log("POSTS:", JSON.stringify(posts, null, 2));
