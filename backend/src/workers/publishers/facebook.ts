@@ -100,9 +100,14 @@ export async function publishToFacebookSuite(
     // 1. Upload Media Files
     if (mediaPaths && mediaPaths.length > 0) {
       console.log(`📸 Uploading ${mediaPaths.length} files to Meta...`);
-      // Find Add Photo button (often a file input or click trigger)
+      
+      // Click the Add Photo/Video button to reveal the file input
+      const addMediaBtn = page.locator("button:has-text('Add photo/video'), button:has-text('Add Photo'), button:has-text('Add photo')").first();
+      await addMediaBtn.waitFor({ state: "visible", timeout: 15000 });
+      await addMediaBtn.click();
+      
       const fileInput = page.locator("input[type='file']").first();
-      await fileInput.waitFor({ state: "attached", timeout: 25000 });
+      await fileInput.waitFor({ state: "attached", timeout: 15000 });
       
       const absolutePaths = mediaPaths.map(p => path.resolve(p));
       for (const p of absolutePaths) {
