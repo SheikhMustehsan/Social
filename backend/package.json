@@ -11,7 +11,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
     "db:studio": "drizzle-kit studio",
-    "capture-session": "tsx scripts/captureSession.ts"
+    "capture-session": "tsx scripts/captureSession.ts",
+    "remote-login": "tsx scripts/remoteLogin.ts"
   },
   "keywords": [],
   "author": "",
