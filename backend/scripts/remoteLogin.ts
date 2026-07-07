@@ -23,10 +23,8 @@ if (!fs.existsSync(profileDir)) {
   fs.mkdirSync(profileDir, { recursive: true });
 }
 
-let loginUrl = "https://www.facebook.com";
-if (targetPlatform === "instagram") {
-  loginUrl = "https://www.instagram.com";
-} else if (targetPlatform === "linkedin") {
+let loginUrl = "https://business.facebook.com/latest/composer";
+if (targetPlatform === "linkedin") {
   loginUrl = "https://www.linkedin.com/login";
 }
 
