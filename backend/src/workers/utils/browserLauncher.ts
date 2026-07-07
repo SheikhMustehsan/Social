@@ -149,6 +149,12 @@ export async function launchBrowserWithStorageState(
     locale: "en-US", // Force English locale for consistent selectors
     deviceScaleFactor: 1,
     ignoreHTTPSErrors: true,
+    // Add Client Hints to match a standard Windows Chrome browser headers
+    extraHTTPHeaders: {
+      "sec-ch-ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": '"Windows"',
+    }
   });
 
   // chromium.launch()+newContext() (unlike launchPersistentContext) returns a browser and
@@ -156,8 +162,33 @@ export async function launchBrowserWithStorageState(
   context.on("close", () => browser.close().catch(() => {}));
 
   await context.addInitScript(() => {
+    // Hide webdriver
     Object.defineProperty(navigator, "webdriver", {
       get: () => undefined,
+    });
+
+    // Mock chrome object (present in headed Chrome but absent in headless/Playwright)
+    (window as any).chrome = {
+      app: {
+        isInstalled: false,
+        InstallState: { DIASBLED: "disabled", INSTALLED: "installed", NOT_INSTALLED: "not_installed" },
+        runningState: () => "cannot_run",
+        getDetails: () => null,
+        getIsInstalled: () => false,
+      },
+      runtime: {
+        OnInstalledReason: { CHROME_UPDATE: "chrome_update", INSTALL: "install", SHARED_MODULE_UPDATE: "shared_module_update", UPDATE: "update" },
+        OnRestartRequiredReason: { APP_UPDATE: "app_update", OS_UPDATE: "os_update", PERIODIC: "periodic" },
+        PlatformArch: { ARM: "arm", ARM64: "arm64", MIPS: "mips", MIPS64: "mips64", X86_32: "x86-32", X86_64: "x86-64" },
+        PlatformNaclArch: { ARM: "arm", MIPS: "mips", MIPS64: "mips64", X86_32: "x86-32", X86_64: "x86-64" },
+        PlatformOs: { ANDROID: "android", CROS: "cros", LINUX: "linux", MAC: "mac", OPENBSD: "openbsd", WIN: "win" },
+        RequestUpdateCheckStatus: { NO_UPDATE: "no_update", THROTTLED: "throttled", UPDATE_AVAILABLE: "update_available" },
+      }
+    };
+
+    // Mock plugins list (headed Chrome has plugins, headless has none)
+    Object.defineProperty(navigator, "plugins", {
+      get: () => [1, 2, 3],
     });
   });
 
