@@ -101,8 +101,9 @@ export async function publishToFacebookSuite(
     if (mediaPaths && mediaPaths.length > 0) {
       console.log(`📸 Uploading ${mediaPaths.length} files to Meta...`);
       
-      // Click the Add Photo/Video button to reveal the file input
-      const addMediaBtn = page.locator("button:has-text('Add photo/video'), button:has-text('Add Photo'), button:has-text('Add photo')").first();
+      // Click the Add Photo/Video button to reveal the file input. Meta's composer uses
+      // div[role="button"] here, not a real <button> tag - matched by aria role, not tag name.
+      const addMediaBtn = page.getByRole("button", { name: /add photo/i }).first();
       await addMediaBtn.waitFor({ state: "visible", timeout: 15000 });
       await addMediaBtn.click();
       

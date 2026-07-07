@@ -47,7 +47,9 @@ export async function publishToLinkedIn(
 
     console.log("👉 Opening share modal...");
     await postTrigger.click();
-    await page.waitForSelector(".share-box-feed-entry__container", { state: "visible", timeout: 10000 });
+    // The personal feed's inline composer uses .share-box-feed-entry__container, but the
+    // Company Page admin dashboard opens a real [role="dialog"] modal instead - match both.
+    await page.waitForSelector('.share-box-feed-entry__container, [role="dialog"]', { state: "visible", timeout: 10000 });
     await page.waitForTimeout(1000);
 
     // 1. Handle Media uploads if files exist
