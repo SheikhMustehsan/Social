@@ -113,6 +113,19 @@ export const postingWorker = new Worker(
     } catch (err: any) {
       console.error(`❌ Job failed for Post ${postId}:`, err.message);
 
+      // Take a general failure screenshot so we can see what the browser saw
+      const errorScreenshot = `error_general_${profile.platform}_${Date.now()}.png`;
+      try {
+        const pages = context.pages();
+        if (pages.length > 0) {
+          await pages[0].screenshot({ path: errorScreenshot });
+          console.log(`📸 Saved failure screenshot to: ${errorScreenshot}`);
+          err.message = `${err.message} (Saved screenshot to ${errorScreenshot})`;
+        }
+      } catch (screenshotErr: any) {
+        console.error("⚠️ Failed to capture error screenshot:", screenshotErr.message);
+      }
+
       // Update database with failure log
       await db.update(posts).set({
         status: "failed",
