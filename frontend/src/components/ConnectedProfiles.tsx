@@ -576,7 +576,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
               type="submit"
               className="glass-button primary animate-pulse"
               style={{ justifyContent: "center", marginTop: "8px" }}
-              disabled={uploadingSession || !uploadedSessionPath}
+              disabled={uploadingSession || (sessionSource === "upload" && !uploadedSessionPath) || (sessionSource === "reuse" && !chromeProfilePath)}
             >
               🚀 Link Channel
             </button>
