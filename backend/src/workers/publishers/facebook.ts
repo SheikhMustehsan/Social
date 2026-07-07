@@ -93,6 +93,8 @@ export async function publishToFacebookSuite(
         );
       }
       console.log(`✅ Confirmed targeting Page: ${pageIdentifier}`);
+      // Give the composer workspace ample time to settle and re-render after switching the target Page
+      await page.waitForTimeout(5000);
     }
 
     // 1. Upload Media Files
@@ -100,7 +102,7 @@ export async function publishToFacebookSuite(
       console.log(`📸 Uploading ${mediaPaths.length} files to Meta...`);
       // Find Add Photo button (often a file input or click trigger)
       const fileInput = page.locator("input[type='file']").first();
-      await fileInput.waitFor({ state: "attached", timeout: 10000 });
+      await fileInput.waitFor({ state: "attached", timeout: 25000 });
       
       const absolutePaths = mediaPaths.map(p => path.resolve(p));
       for (const p of absolutePaths) {
