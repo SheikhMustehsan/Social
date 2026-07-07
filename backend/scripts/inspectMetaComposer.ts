@@ -30,6 +30,24 @@ async function main() {
     const title = await page.title();
     console.log("Page Title:", title);
     
+    const addMediaBtn = page.locator("button:has-text('Add photo/video'), button:has-text('Add Photo'), button:has-text('Add photo')").first();
+    console.log("Is Add Media button visible?", await addMediaBtn.isVisible());
+    if (await addMediaBtn.isVisible()) {
+      console.log("👉 Clicking Add Media button...");
+      await addMediaBtn.click();
+      await page.waitForTimeout(3000);
+    }
+    
+    // Check if input type=file is visible/attached now
+    const fileInputs = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll("input[type='file']")).map(input => ({
+        type: input.type,
+        className: input.className,
+        id: input.id
+      }));
+    });
+    console.log("FILE INPUTS AFTER CLICK:", JSON.stringify(fileInputs, null, 2));
+
     // Find all input elements and log them
     const inputs = await page.evaluate(() => {
       return Array.from(document.querySelectorAll("input")).map(input => ({
