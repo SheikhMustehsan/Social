@@ -76,31 +76,36 @@ export async function publishToLinkedIn(
       await page.waitForTimeout(3000); // Wait for media processing preview
 
       // Click "Next" inside the media modal to return to main composer
-      const nextBtn = page.locator("button:has-text('Next')").first();
-      if (await nextBtn.isVisible()) {
+      const nextBtn = page.getByRole("button", { name: "Next" });
+      try {
+        await nextBtn.waitFor({ state: "visible", timeout: 8000 });
         await nextBtn.click();
         await page.waitForTimeout(1000);
+      } catch (e) {
+        console.log("No Next button found, proceeding...");
       }
     }
 
-    // 2. Type Caption
+    // 2. Write Caption
     console.log("✏️ Typing post caption...");
-    const editor = page.locator(".ql-editor[contenteditable='true']").first();
-    await editor.waitFor({ state: "visible", timeout: 5000 });
-    await editor.focus();
+    const editor = page.locator("div[role='textbox']").first();
+    await editor.waitFor({ state: "visible", timeout: 15000 });
+    await editor.click();
+    await page.waitForTimeout(500);
+
+    // Clear any existing text
+    await editor.fill("");
     
     // Type caption character by character to mimic human behavior
     for (const char of caption) {
-      await page.keyboard.type(char);
-      await page.waitForTimeout(Math.floor(Math.random() * 80) + 40); // 40-120ms delay
+      await editor.type(char, { delay: 30 });
     }
-    
     await page.waitForTimeout(2000);
 
     // 3. Post!
     console.log("🚀 Clicking LinkedIn Publish...");
-    const postBtn = page.locator("button:has-text('Post')").first();
-    await postBtn.waitFor({ state: "visible" });
+    const postBtn = page.getByRole("button", { name: "Post", exact: true }).first();
+    await postBtn.waitFor({ state: "visible", timeout: 10000 });
     await postBtn.click();
 
     // Wait for post success feedback modal/toast
