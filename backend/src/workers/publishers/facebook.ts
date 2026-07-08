@@ -106,10 +106,6 @@ export async function publishToFacebookSuite(
       // We use JS evaluate click to ensure the React event listener is triggered reliably.
       const addMediaBtn = page.getByRole("button", { name: /add photo/i }).first();
       await addMediaBtn.waitFor({ state: "visible", timeout: 15000 });
-      await addMediaBtn.evaluate(el => (el as HTMLElement).click());
-      
-      const fileInput = page.locator("input[type='file']").first();
-      await fileInput.waitFor({ state: "attached", timeout: 15000 });
       
       const absolutePaths = mediaPaths.map(p => path.resolve(p));
       for (const p of absolutePaths) {
@@ -117,8 +113,32 @@ export async function publishToFacebookSuite(
           throw new Error(`Media file not found: ${p}`);
         }
       }
+
+      // Start listening for file chooser event
+      const fileChooserPromise = page.waitForEvent("filechooser", { timeout: 5000 }).catch(() => null);
       
-      await fileInput.setInputFiles(absolutePaths);
+      console.log("Clicking Add Media button...");
+      await addMediaBtn.evaluate(el => (el as HTMLElement).click());
+      
+      let fileChooser = await fileChooserPromise;
+      if (!fileChooser) {
+        // If direct click did not trigger a file chooser, a popover menu has opened instead.
+        // We find the menu item and click it to open the file chooser.
+        const firstMenuItem = page.locator("[role='menuitem']").first();
+        if (await firstMenuItem.count() > 0) {
+          console.log("👉 Dropdown menu detected. Clicking menu item to trigger file chooser...");
+          const menuFileChooserPromise = page.waitForEvent("filechooser", { timeout: 10000 });
+          await firstMenuItem.click();
+          fileChooser = await menuFileChooserPromise;
+        }
+      }
+      
+      if (!fileChooser) {
+        throw new Error("Could not trigger or capture the file chooser dialog in Meta composer.");
+      }
+      
+      console.log("Setting input files...");
+      await fileChooser.setFiles(absolutePaths);
       await page.waitForTimeout(8000); // Wait for upload and preview rendering
     }
 
