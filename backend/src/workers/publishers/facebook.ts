@@ -103,9 +103,10 @@ export async function publishToFacebookSuite(
       
       // Click the Add Photo/Video button to reveal the file input. Meta's composer uses
       // div[role="button"] here, not a real <button> tag - matched by aria role, not tag name.
+      // We use JS evaluate click to ensure the React event listener is triggered reliably.
       const addMediaBtn = page.getByRole("button", { name: /add photo/i }).first();
       await addMediaBtn.waitFor({ state: "visible", timeout: 15000 });
-      await addMediaBtn.click();
+      await addMediaBtn.evaluate(el => (el as HTMLElement).click());
       
       const fileInput = page.locator("input[type='file']").first();
       await fileInput.waitFor({ state: "attached", timeout: 15000 });
