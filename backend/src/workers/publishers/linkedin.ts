@@ -91,7 +91,7 @@ export async function publishToLinkedIn(
     
     // Type caption character by character to mimic human behavior
     for (const char of caption) {
-      await page.keyboard.write(char);
+      await page.keyboard.type(char);
       await page.waitForTimeout(Math.floor(Math.random() * 80) + 40); // 40-120ms delay
     }
     

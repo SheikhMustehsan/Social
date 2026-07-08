@@ -177,7 +177,7 @@ export async function publishToFacebookSuite(
     await textEditor.focus();
 
     for (const char of caption) {
-      await page.keyboard.write(char);
+      await page.keyboard.type(char);
       await page.waitForTimeout(Math.floor(Math.random() * 60) + 30);
     }
     await page.waitForTimeout(3000);
