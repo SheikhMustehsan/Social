@@ -109,7 +109,18 @@ export async function publishToLinkedIn(
     await postBtn.click();
 
     // Wait for post success feedback modal/toast
-    await page.waitForTimeout(10000);
+    // LinkedIn often shows a "Post successful" or redirect, so wait a few seconds
+    console.log("⏳ Waiting for LinkedIn to process the post...");
+    try {
+      // Look for the View post toast or just wait 15 seconds to ensure the network request finishes
+      const toast = page.locator("text='Post successful', text='View post'").first();
+      await toast.waitFor({ state: "visible", timeout: 15000 });
+      console.log("✅ Saw success toast!");
+    } catch (e) {
+      console.log("⏳ Toast not seen, waiting an extra 10 seconds just in case...");
+      await page.waitForTimeout(10000);
+    }
+    
     console.log("✅ Post successfully published to LinkedIn!");
 
   } catch (error: any) {

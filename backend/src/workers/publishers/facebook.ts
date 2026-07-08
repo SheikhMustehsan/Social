@@ -187,7 +187,7 @@ export async function publishToFacebookSuite(
       if (await fbTab.isVisible()) {
         await fbTab.click();
         await page.waitForTimeout(1000);
-        const fbTextBox = page.locator("[role='textbox']").first();
+        const fbTextBox = page.locator("[contenteditable='true'], [role='textbox']").first();
         await fbTextBox.waitFor({ state: "visible", timeout: 10000 });
         for (const char of caption) {
           await fbTextBox.type(char, { delay: 30 });
@@ -199,7 +199,7 @@ export async function publishToFacebookSuite(
       if (await igTab.isVisible()) {
         await igTab.click();
         await page.waitForTimeout(1000);
-        const igTextBox = page.locator("[role='textbox']").first();
+        const igTextBox = page.locator("[contenteditable='true'], [role='textbox']").first();
         await igTextBox.waitFor({ state: "visible", timeout: 10000 });
         // The textbox might have placeholder text or be empty, just append
         for (const char of caption) {
@@ -208,7 +208,7 @@ export async function publishToFacebookSuite(
       }
     } else {
       // Fallback: unified text box is somehow visible
-      const textBox = page.locator("[role='textbox']").first();
+      const textBox = page.locator("[contenteditable='true'], [role='textbox']").first();
       await textBox.waitFor({ state: "visible", timeout: 15000 });
       for (const char of caption) {
         await textBox.type(char);
