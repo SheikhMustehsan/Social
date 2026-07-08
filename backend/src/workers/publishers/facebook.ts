@@ -49,11 +49,11 @@ export async function publishToFacebookSuite(
     // Verify login state
     await page.waitForLoadState("domcontentloaded");
     await page.waitForTimeout(5000); // Give it a moment to resolve any redirects
-    const currentUrl = page.url();
-    if (currentUrl.includes("login") || currentUrl.includes("signin") || currentUrl.includes("loginpage")) {
+    const postComposerUrl = page.url();
+    if (postComposerUrl.includes("login") || postComposerUrl.includes("signin") || postComposerUrl.includes("loginpage")) {
       const errorScreenshot = `error_meta_login_${Date.now()}.png`;
       await page.screenshot({ path: errorScreenshot });
-      throw new Error(`Meta Business Suite session expired. Redirected to login: ${currentUrl}. Saved screenshot to ${errorScreenshot}`);
+      throw new Error(`Meta Business Suite session expired. Redirected to login: ${postComposerUrl}. Saved screenshot to ${errorScreenshot}`);
     }
 
     // A single Meta login can administer many Pages. The composer's "Post to" field is a
@@ -190,7 +190,7 @@ export async function publishToFacebookSuite(
 
     // Wait for the server upload confirmation/routing change
     await page.waitForTimeout(12000);
-    console.log("✅ Post successfully published to Meta!");
+    console.log("✅ Post successfully published to Facebook and/or Instagram!");
 
   } catch (error: any) {
     console.error("❌ Meta publication automated flow failed:", error.message);
