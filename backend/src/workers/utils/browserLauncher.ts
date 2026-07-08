@@ -28,14 +28,11 @@ export async function launchBrowserWithProfile(
 
   let targetProfile = "Default";
   const args = [
-    "--disable-blink-features=AutomationControlled", // Hides navigator.webdriver
+    "--disable-blink-features=AutomationControlled",
     "--disable-infobars",
-    "--start-maximized",
     "--no-sandbox",
     "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-web-security", // Bypasses CORS issues in scrapers
-    "--allow-running-insecure-content",
+    "--disable-dev-shm-usage"
   ];
 
   if (fs.existsSync(resolvedProfilePath)) {
