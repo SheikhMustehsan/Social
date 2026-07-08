@@ -13,10 +13,36 @@ export async function publishToFacebookSuite(
 
   try {
     console.log("➡️ Navigating to Meta Business Suite Composer...");
-    // Go directly to Meta Business Suite composer editor
-    await page.goto("https://business.facebook.com/latest/composer?ref=composer", {
+    console.log("➡️ Establishing Meta Business Suite context via Home redirect...");
+    await page.goto("https://business.facebook.com/", {
       waitUntil: "domcontentloaded",
-      timeout: 60000
+      timeout: 60000,
+    });
+    
+    // Wait for the redirect to establish business_id in the URL
+    await page.waitForURL(url => url.href.includes("business_id"), { timeout: 15000 }).catch(() => null);
+    
+    const currentUrl = page.url();
+    const urlObj = new URL(currentUrl);
+    const businessId = urlObj.searchParams.get("business_id");
+    const assetId = urlObj.searchParams.get("asset_id");
+    
+    let composerUrl = "https://business.facebook.com/latest/composer?ref=composer";
+    if (businessId) {
+      console.log(`💼 Extracted business_id: ${businessId}`);
+      composerUrl += `&business_id=${businessId}`;
+      if (assetId) {
+        console.log(`📄 Extracted asset_id: ${assetId}`);
+        composerUrl += `&asset_id=${assetId}`;
+      }
+    } else {
+      console.warn("⚠️ Could not extract business_id from redirect. Falling back to default composer URL.");
+    }
+    
+    console.log(`➡️ Navigating to Meta Business Suite Composer: ${composerUrl}`);
+    await page.goto(composerUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: 60000,
     });
     await page.waitForTimeout(5000);
 
