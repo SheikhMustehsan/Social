@@ -175,8 +175,9 @@ export async function publishToFacebookSuite(
     // if the "Customise post" toggle is off. We must turn it ON, and type in both tabs.
     const customiseToggle = page.locator("input[aria-label='Customise post for Facebook and Instagram'], [role='switch']:has-text('Customise'), div[role='button']:has-text('Customise post')").first();
     
-    const fbTab = page.locator("div[role='tab']:has-text('Facebook'), span:has-text('Facebook')").first();
-    const igTab = page.locator("div[role='tab']:has-text('Instagram'), span:has-text('Instagram')").first();
+    // STRICTLY look for role='tab' to avoid matching "Facebook Feed preview" spans
+    const fbTab = page.locator("div[role='tab']").filter({ hasText: /^Facebook$/ }).first();
+    const igTab = page.locator("div[role='tab']").filter({ hasText: /^Instagram$/ }).first();
 
     // Check if the tabs are already visible. If not, try to click the toggle.
     const tabsVisible = (await fbTab.isVisible()) || (await igTab.isVisible());
@@ -192,7 +193,8 @@ export async function publishToFacebookSuite(
       if (await fbTab.isVisible()) {
         await fbTab.click();
         await page.waitForTimeout(1000);
-        const fbTextBox = page.locator("[contenteditable='true'], [role='textbox']").first();
+        // Match only visible contenteditable elements to avoid hidden alt-text inputs from media uploads
+        const fbTextBox = page.locator("div[contenteditable='true']:visible, div[role='textbox']:visible, div[role='combobox']:visible").first();
         await fbTextBox.waitFor({ state: "visible", timeout: 10000 });
         for (const char of caption) {
           await fbTextBox.type(char, { delay: 30 });
@@ -200,26 +202,24 @@ export async function publishToFacebookSuite(
       }
 
       // Fill Instagram Tab
-      const igTab = page.locator("div[role='tab']:has-text('Instagram'), span:has-text('Instagram')").first();
       if (await igTab.isVisible()) {
         await igTab.click();
         await page.waitForTimeout(1000);
-        const igTextBox = page.locator("[contenteditable='true'], [role='textbox']").first();
+        const igTextBox = page.locator("div[contenteditable='true']:visible, div[role='textbox']:visible, div[role='combobox']:visible").first();
         await igTextBox.waitFor({ state: "visible", timeout: 10000 });
-        // The textbox might have placeholder text or be empty, just append
         for (const char of caption) {
           await igTextBox.type(char, { delay: 30 });
         }
       }
     } else {
       // Fallback: unified text box is somehow visible
-      const textBox = page.locator("[contenteditable='true'], [role='textbox']").first();
+      const textBox = page.locator("div[contenteditable='true']:visible, div[role='textbox']:visible, div[role='combobox']:visible").first();
       await textBox.waitFor({ state: "visible", timeout: 15000 });
       for (const char of caption) {
-        await textBox.type(char);
-        await page.waitForTimeout(Math.floor(Math.random() * 50) + 20);
+        await textBox.type(char, { delay: 30 });
       }
-    }await page.waitForTimeout(3000);
+    }
+    await page.waitForTimeout(3000);
 
     // 3. Click Publish Button
     console.log("🚀 Publishing to Meta Page...");
