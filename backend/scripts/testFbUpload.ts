@@ -69,8 +69,29 @@ async function main() {
     
     console.log("Clicking Add Media button...");
     await addMediaBtn.click();
-    console.log("Clicked! Waiting 5 seconds...");
-    await page.waitForTimeout(5000);
+    console.log("Clicked! Waiting 2 seconds for menu...");
+    await page.waitForTimeout(2000);
+    
+    // Check menu items
+    const menuItems = await page.locator("[role='menuitem']").evaluateAll(elems =>
+      elems.map(el => ({
+        text: el.innerText,
+        role: el.getAttribute("role"),
+        outerHTML: el.outerHTML.slice(0, 200)
+      }))
+    ).catch(() => []);
+    console.log("Menu items in DOM:", JSON.stringify(menuItems, null, 2));
+
+    // Try to click the first menuitem or specific Add photo/video text in menu
+    const firstMenuItem = page.locator("[role='menuitem']").first();
+    const menuItemCount = await firstMenuItem.count();
+    console.log(`Menu item count: ${menuItemCount}`);
+    if (menuItemCount > 0) {
+      console.log("Clicking first menu item...");
+      await firstMenuItem.click();
+      console.log("Clicked menu item! Waiting 5 seconds...");
+      await page.waitForTimeout(5000);
+    }
     
     // Check file inputs again
     const postClickFileInputs = await page.locator("input[type='file']").count();
