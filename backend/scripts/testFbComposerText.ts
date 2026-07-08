@@ -57,16 +57,33 @@ async function main() {
     if (fileChooser) {
       const dummyPath = path.resolve("./data/uploads/7836e118-a14e-422d-b60d-afccf88f163a.jpg");
       await fileChooser.setFiles([dummyPath]);
-      console.log("File uploaded! Waiting 10 seconds for upload/render to settle...");
+      console.log("File uploaded! Waiting 10 seconds...");
       await page.waitForTimeout(10000);
     }
   }
 
-  // 2. Scan entire DOM for any inputs or placeholder attributes
-  console.log("Scanning entire DOM...");
+  // 2. Click the customize switch
+  console.log("Locating Customise switch...");
+  const switchInput = page.locator("input[type='checkbox'][aria-label*='Customise']").first();
+  const switchCount = await switchInput.count();
+  console.log(`Customise switch count: ${switchCount}`);
+  
+  if (switchCount > 0) {
+    console.log("Switching 'Customise post' ON...");
+    // Check if it's already checked
+    const isChecked = await switchInput.isChecked();
+    console.log(`Initial customise switch checked state: ${isChecked}`);
+    if (!isChecked) {
+      await switchInput.evaluate(el => (el as HTMLInputElement).click());
+      console.log("Clicked customise switch. Waiting 5 seconds...");
+      await page.waitForTimeout(5000);
+    }
+  }
+
+  // 3. Scan DOM for textboxes again
+  console.log("Scanning DOM for textboxes after customize switch...");
   const domReport = await page.evaluate(() => {
     const elements = Array.from(document.querySelectorAll("*"));
-    
     const results = [];
     for (const el of elements) {
       const attributes: Record<string, string> = {};
@@ -76,14 +93,12 @@ async function main() {
       }
       
       const text = el.textContent?.trim() || "";
-      const hasPlaceholder = el.hasAttribute("placeholder") || el.outerHTML.toLowerCase().includes("placeholder") || el.outerHTML.toLowerCase().includes("write something");
-      
       if (
-        hasPlaceholder ||
         el.tagName === "INPUT" ||
         el.tagName === "TEXTAREA" ||
         el.hasAttribute("contenteditable") ||
-        el.getAttribute("role") === "textbox"
+        el.getAttribute("role") === "textbox" ||
+        el.outerHTML.toLowerCase().includes("placeholder")
       ) {
         results.push({
           tagName: el.tagName,
@@ -99,6 +114,9 @@ async function main() {
   });
 
   console.log("🔍 DOM Scan Results:", JSON.stringify(domReport, null, 2));
+
+  await page.screenshot({ path: "/home/dccdev/Social/backend/fb_textbox_customize.png" });
+  console.log("Saved screenshot to /home/dccdev/Social/backend/fb_textbox_customize.png");
 
   await context.close();
 }
