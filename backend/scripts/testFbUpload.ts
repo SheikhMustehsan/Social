@@ -56,9 +56,16 @@ async function main() {
   const exists = await addMediaBtn.count();
   console.log(`getByRole button count: ${exists}`);
   if (exists > 0) {
-    const text = await addMediaBtn.innerText().catch(() => "");
+    const html = await addMediaBtn.evaluate(el => el.outerHTML).catch(() => "");
+    console.log(`Button outerHTML: ${html}`);
+    const parentHtml = await addMediaBtn.evaluate(el => el.parentElement ? el.parentElement.outerHTML.slice(0, 500) : "").catch(() => "");
+    console.log(`Button parent HTML (first 500 chars): ${parentHtml}`);
+    
     const isVisible = await addMediaBtn.isVisible();
-    console.log(`Button text: "${text}", visible: ${isVisible}`);
+    console.log(`Button visible: ${isVisible}`);
+    
+    await page.screenshot({ path: "/home/dccdev/Social/backend/fb_test_pre_click.png" });
+    console.log("Screenshot saved to /home/dccdev/Social/backend/fb_test_pre_click.png");
     
     console.log("Clicking Add Media button...");
     await addMediaBtn.click();
@@ -68,11 +75,6 @@ async function main() {
     // Check file inputs again
     const postClickFileInputs = await page.locator("input[type='file']").count();
     console.log(`Post-click input[type='file'] count: ${postClickFileInputs}`);
-    
-    // Check if there are other role='menuitem' or dialog elements
-    console.log("Checking for popovers/menus...");
-    const menuItems = await page.locator("[role='menuitem']").allInnerTexts().catch(() => []);
-    console.log("Menu items found:", menuItems);
     
     // Let's dump all inputs
     const inputs = await page.locator("input").evaluateAll(elems => 
