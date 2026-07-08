@@ -67,31 +67,25 @@ async function main() {
     await page.screenshot({ path: "/home/dccdev/Social/backend/fb_test_pre_click.png" });
     console.log("Screenshot saved to /home/dccdev/Social/backend/fb_test_pre_click.png");
     
-    console.log("Method 1: Standard Playwright click on addMediaBtn...");
-    await addMediaBtn.click();
-    await page.waitForTimeout(3000);
-    let fileInputCount = await page.locator("input[type='file']").count();
-    console.log(`Method 1 result: input[type='file'] count = ${fileInputCount}`);
-
-    if (fileInputCount === 0) {
-      console.log("Method 2: JS evaluate click on addMediaBtn...");
-      await addMediaBtn.evaluate(el => (el as HTMLElement).click());
-      await page.waitForTimeout(3000);
-      fileInputCount = await page.locator("input[type='file']").count();
-      console.log(`Method 2 result: input[type='file'] count = ${fileInputCount}`);
-    }
-
-    if (fileInputCount === 0) {
-      console.log("Method 3: Clicking the text span 'Add photo/video' directly...");
-      const textSpan = page.locator("span:has-text('Add photo/video'), span:has-text('Add photo')").first();
-      const textSpanCount = await textSpan.count();
-      console.log(`Text span count: ${textSpanCount}`);
-      if (textSpanCount > 0) {
-        await textSpan.click();
-        await page.waitForTimeout(3000);
-        fileInputCount = await page.locator("input[type='file']").count();
-        console.log(`Method 3 result: input[type='file'] count = ${fileInputCount}`);
+    console.log("Listening for filechooser event...");
+    const fileChooserPromise = page.waitForEvent("filechooser", { timeout: 10000 }).catch(() => null);
+    
+    console.log("Clicking Add Media button (JS click)...");
+    await addMediaBtn.evaluate(el => (el as HTMLElement).click());
+    
+    const fileChooser = await fileChooserPromise;
+    if (fileChooser) {
+      console.log("✅ Success! Captured native filechooser event.");
+      // We can upload a dummy file to test
+      const dummyPath = path.resolve("./data/uploads/7836e118-a14e-422d-b60d-afccf88f163a.jpg");
+      if (fs.existsSync(dummyPath)) {
+        await fileChooser.setFiles([dummyPath]);
+        console.log("Dummy file set via filechooser.");
+      } else {
+        console.log(`Dummy file not found at ${dummyPath}`);
       }
+    } else {
+      console.log("❌ No filechooser event captured.");
     }
     
     // Check file inputs again
