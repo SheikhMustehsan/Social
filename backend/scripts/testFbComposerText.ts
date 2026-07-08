@@ -6,7 +6,6 @@ async function main() {
   process.env.DISPLAY = ":99";
   const profileDir = path.resolve("/home/dccdev/Social/backend/data/sessions/server_profile_facebook");
   
-  console.log(`🚀 Launching Playwright with profile: ${profileDir}`);
   const args = [
     "--disable-blink-features=AutomationControlled",
     "--disable-infobars",
@@ -63,44 +62,43 @@ async function main() {
     }
   }
 
-  // 2. Find and check textboxes
-  console.log("Dumping all textboxes and textareas...");
-  
-  // Method A: [role='textbox']
-  const textboxes = await page.locator("[role='textbox']").evaluateAll(elems =>
-    elems.map(el => ({
-      tagName: el.tagName,
-      role: el.getAttribute("role"),
-      className: el.className,
-      outerHTML: el.outerHTML.slice(0, 300),
-      isVisible: (el as HTMLElement).offsetHeight > 0 && (el as HTMLElement).offsetWidth > 0
-    }))
-  ).catch(() => []);
-  console.log("[role='textbox'] elements:", JSON.stringify(textboxes, null, 2));
+  // 2. Scan entire DOM for any inputs or placeholder attributes
+  console.log("Scanning entire DOM...");
+  const domReport = await page.evaluate(() => {
+    const elements = Array.from(document.querySelectorAll("*"));
+    
+    const results = [];
+    for (const el of elements) {
+      const attributes: Record<string, string> = {};
+      for (let i = 0; i < el.attributes.length; i++) {
+        const attr = el.attributes[i];
+        attributes[attr.name] = attr.value;
+      }
+      
+      const text = el.textContent?.trim() || "";
+      const hasPlaceholder = el.hasAttribute("placeholder") || el.outerHTML.toLowerCase().includes("placeholder") || el.outerHTML.toLowerCase().includes("write something");
+      
+      if (
+        hasPlaceholder ||
+        el.tagName === "INPUT" ||
+        el.tagName === "TEXTAREA" ||
+        el.hasAttribute("contenteditable") ||
+        el.getAttribute("role") === "textbox"
+      ) {
+        results.push({
+          tagName: el.tagName,
+          id: el.id,
+          className: el.className,
+          attributes,
+          text: text.slice(0, 100),
+          outerHTML: el.outerHTML.slice(0, 300)
+        });
+      }
+    }
+    return results;
+  });
 
-  // Method B: Contenteditable divs
-  const contenteditables = await page.locator("[contenteditable='true']").evaluateAll(elems =>
-    elems.map(el => ({
-      tagName: el.tagName,
-      className: el.className,
-      outerHTML: el.outerHTML.slice(0, 300),
-      isVisible: (el as HTMLElement).offsetHeight > 0 && (el as HTMLElement).offsetWidth > 0
-    }))
-  ).catch(() => []);
-  console.log("contenteditable='true' elements:", JSON.stringify(contenteditables, null, 2));
-
-  // Method C: textarea
-  const textareas = await page.locator("textarea").evaluateAll(elems =>
-    elems.map(el => ({
-      className: el.className,
-      outerHTML: el.outerHTML.slice(0, 300),
-      isVisible: (el as HTMLElement).offsetHeight > 0 && (el as HTMLElement).offsetWidth > 0
-    }))
-  ).catch(() => []);
-  console.log("textarea elements:", JSON.stringify(textareas, null, 2));
-
-  await page.screenshot({ path: "/home/dccdev/Social/backend/fb_textbox_test.png" });
-  console.log("Saved screenshot to /home/dccdev/Social/backend/fb_textbox_test.png");
+  console.log("🔍 DOM Scan Results:", JSON.stringify(domReport, null, 2));
 
   await context.close();
 }
