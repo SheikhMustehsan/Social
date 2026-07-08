@@ -33,90 +33,41 @@ async function main() {
     timeout: 60000,
   });
 
-  console.log("Waiting 10 seconds for the page to fully render...");
   await page.waitForTimeout(10000);
 
-  // 1. Upload Media
-  console.log("Uploading file...");
-  const addMediaBtn = page.getByRole("button", { name: /add photo/i }).first();
-  const exists = await addMediaBtn.count();
-  if (exists > 0) {
-    const fileChooserPromise = page.waitForEvent("filechooser", { timeout: 5000 }).catch(() => null);
-    await addMediaBtn.evaluate(el => (el as HTMLElement).click());
-    
-    let fileChooser = await fileChooserPromise;
-    if (!fileChooser) {
-      const firstMenuItem = page.locator("[role='menuitem']").first();
-      if (await firstMenuItem.count() > 0) {
-        const menuFileChooserPromise = page.waitForEvent("filechooser", { timeout: 10000 });
-        await firstMenuItem.click();
-        fileChooser = await menuFileChooserPromise;
-      }
-    }
-    
-    if (fileChooser) {
-      const dummyPath = path.resolve("./data/uploads/7836e118-a14e-422d-b60d-afccf88f163a.jpg");
-      await fileChooser.setFiles([dummyPath]);
-      console.log("File uploaded! Waiting 10 seconds...");
-      await page.waitForTimeout(10000);
-    }
-  }
+  // Check for iframes
+  const iframeCount = await page.locator("iframe").count();
+  console.log(`Number of iframes found: ${iframeCount}`);
 
-  // 2. Click the customize switch
-  console.log("Locating Customise switch...");
-  const switchInput = page.locator("input[type='checkbox'][aria-label*='Customise']").first();
-  const switchCount = await switchInput.count();
-  console.log(`Customise switch count: ${switchCount}`);
-  
-  if (switchCount > 0) {
-    console.log("Switching 'Customise post' ON...");
-    // Check if it's already checked
-    const isChecked = await switchInput.isChecked();
-    console.log(`Initial customise switch checked state: ${isChecked}`);
-    if (!isChecked) {
-      await switchInput.evaluate(el => (el as HTMLInputElement).click());
-      console.log("Clicked customise switch. Waiting 5 seconds...");
-      await page.waitForTimeout(5000);
-    }
-  }
+  const iframesInfo = await page.locator("iframe").evaluateAll(elems =>
+    elems.map(el => ({
+      id: el.id,
+      name: el.getAttribute("name"),
+      src: el.getAttribute("src"),
+      className: el.className,
+      outerHTML: el.outerHTML.slice(0, 300)
+    }))
+  ).catch(() => []);
+  console.log("Iframes details:", JSON.stringify(iframesInfo, null, 2));
 
-  // 3. Scan DOM for textboxes again
-  console.log("Scanning DOM for textboxes after customize switch...");
-  const domReport = await page.evaluate(() => {
-    const elements = Array.from(document.querySelectorAll("*"));
-    const results = [];
-    for (const el of elements) {
-      const attributes: Record<string, string> = {};
-      for (let i = 0; i < el.attributes.length; i++) {
-        const attr = el.attributes[i];
-        attributes[attr.name] = attr.value;
-      }
-      
-      const text = el.textContent?.trim() || "";
-      if (
-        el.tagName === "INPUT" ||
-        el.tagName === "TEXTAREA" ||
-        el.hasAttribute("contenteditable") ||
-        el.getAttribute("role") === "textbox" ||
-        el.outerHTML.toLowerCase().includes("placeholder")
-      ) {
-        results.push({
-          tagName: el.tagName,
-          id: el.id,
-          className: el.className,
-          attributes,
-          text: text.slice(0, 100),
-          outerHTML: el.outerHTML.slice(0, 300)
-        });
-      }
-    }
-    return results;
+  // Let's also check all elements in the main document that have any class containing "editor" or "input" or "text"
+  console.log("Checking class names containing 'editor' or 'input' or 'text'...");
+  const matchingClasses = await page.evaluate(() => {
+    const all = Array.from(document.querySelectorAll("*"));
+    return all
+      .filter(el => {
+        const cls = el.className || "";
+        if (typeof cls !== "string") return false;
+        return cls.toLowerCase().includes("editor") || cls.toLowerCase().includes("input") || cls.toLowerCase().includes("textbox");
+      })
+      .slice(0, 50)
+      .map(el => ({
+        tagName: el.tagName,
+        className: el.className,
+        outerHTML: el.outerHTML.slice(0, 200)
+      }));
   });
-
-  console.log("🔍 DOM Scan Results:", JSON.stringify(domReport, null, 2));
-
-  await page.screenshot({ path: "/home/dccdev/Social/backend/fb_textbox_customize.png" });
-  console.log("Saved screenshot to /home/dccdev/Social/backend/fb_textbox_customize.png");
+  console.log("Matching elements by class name:", JSON.stringify(matchingClasses, null, 2));
 
   await context.close();
 }
