@@ -36,6 +36,10 @@ export async function launchBrowserWithProfile(
     "--disable-dev-shm-usage",
     "--disable-web-security", // Bypasses CORS issues in scrapers
     "--allow-running-insecure-content",
+    "--disable-gpu",               // No GPU needed on headless server, saves memory
+    "--disable-software-rasterizer",
+    "--memory-pressure-off",       // Prevent Chrome from self-throttling under server memory pressure
+    "--js-flags=--max-old-space-size=512", // Cap JS heap at 512MB per tab
   ];
 
   if (fs.existsSync(resolvedProfilePath)) {

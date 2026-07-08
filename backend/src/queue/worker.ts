@@ -148,7 +148,7 @@ export const postingWorker = new Worker(
   },
   {
     connection,
-    concurrency: 2, // Process up to 2 browser posting tasks concurrently on our server
+    concurrency: 1, // Run one browser posting task at a time to avoid RAM exhaustion on server
   }
 );
 
