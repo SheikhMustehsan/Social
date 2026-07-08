@@ -6,6 +6,7 @@ import { launchBrowserWithStorageState, launchBrowserWithProfile } from "../work
 import { publishToFacebookSuite } from "../workers/publishers/facebook.js";
 import { publishToLinkedIn } from "../workers/publishers/linkedin.js";
 import { publishToTikTok } from "../workers/publishers/tiktok.js";
+import { publishToInstagram } from "../workers/publishers/instagram.js";
 import { connection } from "./queue.js";
 import fs from "fs";
 
@@ -72,9 +73,10 @@ export const postingWorker = new Worker(
       // 2. Dispatch to correct Platform Publisher
       const mediaList = post.mediaUrls as string[];
 
-      if (profile.platform === "facebook" || profile.platform === "instagram") {
-        const platformKey = profile.platform as "facebook" | "instagram";
-        await publishToFacebookSuite(context, post.caption || "", mediaList, [platformKey], profile.profileId || undefined);
+      if (profile.platform === "facebook") {
+        await publishToFacebookSuite(context, post.caption || "", mediaList, ["facebook"], profile.profileId || undefined);
+      } else if (profile.platform === "instagram") {
+        await publishToInstagram(context, post.caption || "", mediaList);
       } else if (profile.platform === "linkedin") {
         await publishToLinkedIn(context, post.caption || "", mediaList, profile.profileId || undefined);
       } else if (profile.platform === "tiktok") {
@@ -121,7 +123,8 @@ export const postingWorker = new Worker(
       try {
         const pages = context.pages();
         if (pages.length > 0) {
-          await pages[0].screenshot({ path: errorScreenshot });
+          const lastPage = pages[pages.length - 1];
+          await lastPage.screenshot({ path: errorScreenshot, fullPage: true });
           console.log(`📸 Saved failure screenshot to: ${errorScreenshot}`);
           err.message = `${err.message} (Saved screenshot to ${errorScreenshot})`;
         }
