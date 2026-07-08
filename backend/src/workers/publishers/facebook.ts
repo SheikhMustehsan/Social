@@ -175,15 +175,20 @@ export async function publishToFacebookSuite(
     // if the "Customise post" toggle is off. We must turn it ON, and type in both tabs.
     const customiseToggle = page.locator("input[aria-label='Customise post for Facebook and Instagram'], [role='switch']:has-text('Customise'), div[role='button']:has-text('Customise post')").first();
     
-    if (await customiseToggle.isVisible()) {
-      const isChecked = await customiseToggle.getAttribute("aria-checked");
-      if (isChecked !== "true") {
-        await customiseToggle.click({ force: true });
-        await page.waitForTimeout(2000);
-      }
+    const fbTab = page.locator("div[role='tab']:has-text('Facebook'), span:has-text('Facebook')").first();
+    const igTab = page.locator("div[role='tab']:has-text('Instagram'), span:has-text('Instagram')").first();
 
+    // Check if the tabs are already visible. If not, try to click the toggle.
+    const tabsVisible = (await fbTab.isVisible()) || (await igTab.isVisible());
+    
+    if (!tabsVisible && await customiseToggle.isVisible()) {
+      console.log("➡️ Customise toggle is off. Clicking to reveal tabs...");
+      await customiseToggle.click({ force: true });
+      await page.waitForTimeout(2000);
+    }
+
+    if ((await fbTab.isVisible()) || (await igTab.isVisible())) {
       // Fill Facebook Tab
-      const fbTab = page.locator("div[role='tab']:has-text('Facebook'), span:has-text('Facebook')").first();
       if (await fbTab.isVisible()) {
         await fbTab.click();
         await page.waitForTimeout(1000);
