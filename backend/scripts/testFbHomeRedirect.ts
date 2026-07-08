@@ -45,14 +45,19 @@ async function main() {
   const homeUrl = page.url();
   console.log(`🏠 Current URL: ${homeUrl}`);
 
-  // Extract business_id from URL
+  // Extract parameters
   const urlObj = new URL(homeUrl);
   const businessId = urlObj.searchParams.get("business_id");
-  console.log(`Business ID extracted: ${businessId}`);
+  const assetId = urlObj.searchParams.get("asset_id");
+  console.log(`Extracted business_id: ${businessId}, asset_id: ${assetId}`);
 
   if (businessId) {
-    const composerUrl = `https://business.facebook.com/latest/composer?business_id=${businessId}&ref=composer`;
-    console.log(`➡️ Navigating to Composer with business_id: ${composerUrl}`);
+    let composerUrl = `https://business.facebook.com/latest/composer?business_id=${businessId}&ref=composer`;
+    if (assetId) {
+      composerUrl += `&asset_id=${assetId}`;
+    }
+    
+    console.log(`➡️ Navigating to Composer: ${composerUrl}`);
     await page.goto(composerUrl, {
       waitUntil: "domcontentloaded",
       timeout: 60000,
@@ -74,8 +79,7 @@ async function main() {
     await page.screenshot({ path: "/home/dccdev/Social/backend/fb_composer_business_id.png" });
     console.log("Saved screenshot to /home/dccdev/Social/backend/fb_composer_business_id.png");
   } else {
-    console.log("❌ Could not extract business_id from redirect URL.");
-    await page.screenshot({ path: "/home/dccdev/Social/backend/fb_home_no_id.png" });
+    console.log("❌ Could not extract business_id.");
   }
 
   await context.close();
