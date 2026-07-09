@@ -105,8 +105,7 @@ export async function profileRoutes(fastify: FastifyInstance) {
       else if (platform === "instagram") targetUrl = "https://www.instagram.com";
       else if (platform === "linkedin") targetUrl = "https://www.linkedin.com";
       else if (platform === "tiktok") targetUrl = "https://www.tiktok.com";
-
-      await page.goto(targetUrl);
+      page.goto(targetUrl).catch((e) => console.log(`Navigation to ${targetUrl} issue:`, e.message));
 
       // Block response until user manually closes the Chromium browser window
       await new Promise<void>((resolve) => {
