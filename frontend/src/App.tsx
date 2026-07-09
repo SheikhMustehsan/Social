@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Auth from "./pages/Auth.js";
 import ConnectedProfiles from "./components/ConnectedProfiles.js";
 import Scheduler from "./components/Scheduler.js";
+import Moderation from "./components/Moderation.js";
 import "./App.css";
 import { API_BASE } from "./config";
 
@@ -318,54 +319,7 @@ export default function App() {
           )}
 
           {activeTab === "moderation" && (
-            <div className="tab-panel glass-panel animate-fade-in placeholder-panel">
-              <h3>💬 Social Inbox & Auto-Moderation Slot</h3>
-              <p>Trigger background processes to scan and auto-reply to DMs and comments.</p>
-              <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
-                <button 
-                  className="glass-button" 
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(`${API_BASE}/api/profiles/sync-dms`, {
-                        method: "POST",
-                        headers: {
-                          Authorization: `Bearer ${token}`,
-                          "x-company-id": activeCompanyId || ""
-                        }
-                      });
-                      const data = await res.json();
-                      if (res.ok) alert("DM sync triggered! Check terminal for logs.");
-                      else alert("Error: " + data.error);
-                    } catch (e) {
-                      alert("Network error");
-                    }
-                  }}
-                >
-                  Sync & Auto-Reply DMs
-                </button>
-                <button 
-                  className="glass-button" 
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(`${API_BASE}/api/profiles/sync-comments`, {
-                        method: "POST",
-                        headers: {
-                          Authorization: `Bearer ${token}`,
-                          "x-company-id": activeCompanyId || ""
-                        }
-                      });
-                      const data = await res.json();
-                      if (res.ok) alert("Comment sync triggered! Check terminal for logs.");
-                      else alert("Error: " + data.error);
-                    } catch (e) {
-                      alert("Network error");
-                    }
-                  }}
-                >
-                  Sync & Auto-Reply Comments
-                </button>
-              </div>
-            </div>
+            <Moderation token={token} companyId={activeCompanyId || ""} />
           )}
 
           {activeTab === "ads" && (
