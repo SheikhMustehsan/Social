@@ -1,6 +1,5 @@
 import { BrowserContext } from "playwright";
 import { launchBrowserWithProfile } from "../utils/browserLauncher.js";
-import { syncChromeProfile } from "../utils/profileSync.js";
 import path from "path";
 import fs from "fs";
 
@@ -16,12 +15,8 @@ export async function crawlAndReplyComments(
   autoReplyText: string = "Thank you for your comment! Check your DMs.",
   likeNewComments: boolean = true
 ): Promise<Comment[]> {
-  const tempProfilePath = path.resolve(`./data/profiles/running_comment_crawler_${Date.now()}`);
-  
-  // Sync profile sessions
-  syncChromeProfile(profilePath, tempProfilePath);
-  
-  const context = await launchBrowserWithProfile(tempProfilePath, { headless: true });
+  process.env.DISPLAY = ":99";
+  const context = await launchBrowserWithProfile(profilePath, { headless: false });
   const page = await context.newPage();
   
   try {
@@ -79,7 +74,7 @@ export async function crawlAndReplyComments(
             const replyInput = page.locator("textarea[placeholder*='comment'], [role='textbox']").first();
             if (await replyInput.isVisible()) {
               await replyInput.focus();
-              await page.keyboard.write(autoReplyText);
+              await page.keyboard.insertText(autoReplyText);
               await page.waitForTimeout(1000);
               
               // Click post button
@@ -99,8 +94,5 @@ export async function crawlAndReplyComments(
     throw error;
   } finally {
     await context.close();
-    if (fs.existsSync(tempProfilePath)) {
-      fs.rmSync(tempProfilePath, { recursive: true, force: true });
-    }
   }
 }

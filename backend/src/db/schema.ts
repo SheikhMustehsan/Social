@@ -40,6 +40,7 @@ export const socialProfiles = sqliteTable("social_profiles", {
   platform: text("platform").notNull(), // 'facebook', 'instagram', 'linkedin', 'tiktok'
   profileName: text("profile_name").notNull(),
   profileId: text("profile_id"), // External ID from the social platform
+  adAccountId: text("ad_account_id"), // Associated Ad Account ID for pulling ads analytics
   chromeProfilePath: text("chrome_profile_path").notNull(), // Path to persistent browser context
   status: text("status").default("connected").notNull(), // 'connected', 'error'
   createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),

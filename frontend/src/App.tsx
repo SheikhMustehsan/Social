@@ -320,7 +320,51 @@ export default function App() {
           {activeTab === "moderation" && (
             <div className="tab-panel glass-panel animate-fade-in placeholder-panel">
               <h3>💬 Social Inbox & Auto-Moderation Slot</h3>
-              <p>Will connect DMs and comments via MutationObservers and auto-reply engines.</p>
+              <p>Trigger background processes to scan and auto-reply to DMs and comments.</p>
+              <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
+                <button 
+                  className="glass-button" 
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API_BASE}/api/profiles/sync-dms`, {
+                        method: "POST",
+                        headers: {
+                          Authorization: `Bearer ${token}`,
+                          "x-company-id": activeCompanyId || ""
+                        }
+                      });
+                      const data = await res.json();
+                      if (res.ok) alert("DM sync triggered! Check terminal for logs.");
+                      else alert("Error: " + data.error);
+                    } catch (e) {
+                      alert("Network error");
+                    }
+                  }}
+                >
+                  Sync & Auto-Reply DMs
+                </button>
+                <button 
+                  className="glass-button" 
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API_BASE}/api/profiles/sync-comments`, {
+                        method: "POST",
+                        headers: {
+                          Authorization: `Bearer ${token}`,
+                          "x-company-id": activeCompanyId || ""
+                        }
+                      });
+                      const data = await res.json();
+                      if (res.ok) alert("Comment sync triggered! Check terminal for logs.");
+                      else alert("Error: " + data.error);
+                    } catch (e) {
+                      alert("Network error");
+                    }
+                  }}
+                >
+                  Sync & Auto-Reply Comments
+                </button>
+              </div>
             </div>
           )}
 
@@ -328,6 +372,27 @@ export default function App() {
             <div className="tab-panel glass-panel animate-fade-in placeholder-panel">
               <h3>📈 Ads Campaign Manager Slot</h3>
               <p>Will fetch ad data, CTR, conversions, and handle spreadsheet reporting.</p>
+              <button 
+                className="glass-button" 
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`${API_BASE}/api/analytics/sync-ads`, {
+                      method: "POST",
+                      headers: {
+                        Authorization: `Bearer ${token}`,
+                        "x-company-id": activeCompanyId || ""
+                      }
+                    });
+                    const data = await res.json();
+                    if (res.ok) alert("Ads sync triggered! Check terminal for background scraper logs.");
+                    else alert("Error: " + data.error);
+                  } catch (e) {
+                    alert("Network error triggering sync");
+                  }
+                }}
+              >
+                Sync Ads Data (Export CSV)
+              </button>
             </div>
           )}
 

@@ -2,7 +2,7 @@ import { FastifyInstance } from "fastify";
 import { db } from "../../db/db.js";
 import { posts, socialProfiles } from "../../db/schema.js";
 import { authenticate, authorizeCompanyAccess, authorizeCompanyAdmin } from "../middleware/auth.js";
-import { postingQueue } from "../../queue/queue.js";
+import { browserQueue } from "../../queue/queue.js";
 import { eq, and, desc } from "drizzle-orm";
 
 export async function schedulerRoutes(fastify: FastifyInstance) {
@@ -61,9 +61,9 @@ export async function schedulerRoutes(fastify: FastifyInstance) {
         console.log(`⏱️ Queueing post ${post.id} for profile ${profileId} with ${delay}ms delay`);
 
         // Add to BullMQ with delay and custom job ID
-        await postingQueue.add(
-          "publish-post",
-          { postId: post.id },
+        await browserQueue.add(
+          `post_${post.id}`,
+          { type: "publish_post", postId: post.id },
           { 
             delay,
             jobId: `post_${post.id}`
@@ -140,7 +140,7 @@ export async function schedulerRoutes(fastify: FastifyInstance) {
       const delay = Math.max(0, scheduleDate.getTime() - Date.now());
 
       // Remove the existing delayed job so it doesn't fire at the old time
-      const job = await postingQueue.getJob(`post_${postId}`);
+      const job = await browserQueue.getJob(`post_${postId}`);
       if (job) {
         await job.remove();
       }
@@ -151,9 +151,9 @@ export async function schedulerRoutes(fastify: FastifyInstance) {
         .where(eq(posts.id, postId))
         .returning();
 
-      await postingQueue.add(
-        "publish-post",
-        { postId },
+      await browserQueue.add(
+        `post_${postId}`,
+        { type: "publish_post", postId },
         { delay, jobId: `post_${postId}` }
       );
 
@@ -189,7 +189,7 @@ export async function schedulerRoutes(fastify: FastifyInstance) {
       const post = foundPosts[0];
 
       // Remove from BullMQ if still active/delayed
-      const job = await postingQueue.getJob(`post_${post.id}`);
+      const job = await browserQueue.getJob(`post_${post.id}`);
       if (job) {
         await job.remove();
         console.log(`🧹 Removed delayed job post_${post.id} from BullMQ`);

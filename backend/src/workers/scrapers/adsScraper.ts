@@ -1,6 +1,5 @@
 import { BrowserContext } from "playwright";
 import { launchBrowserWithProfile } from "../utils/browserLauncher.js";
-import { syncChromeProfile } from "../utils/profileSync.js";
 import path from "path";
 import fs from "fs";
 
@@ -9,17 +8,14 @@ export async function scrapeAdsCSVReport(
   adAccountId: string,
   dateRange: "last_30_days" | "this_month" | "last_month" = "last_30_days"
 ): Promise<string> {
-  const tempProfilePath = path.resolve(`./data/profiles/running_ads_scraper_${Date.now()}`);
   const tempDownloadDir = path.resolve("./data/temp");
   
   if (!fs.existsSync(tempDownloadDir)) {
     fs.mkdirSync(tempDownloadDir, { recursive: true });
   }
 
-  // Sync session profiles
-  syncChromeProfile(profilePath, tempProfilePath);
-
-  const context = await launchBrowserWithProfile(tempProfilePath, { headless: true });
+  process.env.DISPLAY = ":99";
+  const context = await launchBrowserWithProfile(profilePath, { headless: false });
   const page = await context.newPage();
 
   try {
@@ -32,7 +28,7 @@ export async function scrapeAdsCSVReport(
 
     // 1. Set Date Range
     console.log("👉 Setting Date Range in Ads Manager...");
-    const datePicker = page.locator("[data-testid='date-picker-button'], button:has-text('Last 30 Days'), button:has-text('This Month')").first();
+    const datePicker = page.locator("div[role='button']:has-text('Last 30 days'), div[role='button']:has-text('This month'), button:has-text('Last 30 days'), button:has-text('This month')").first();
     if (await datePicker.isVisible()) {
       await datePicker.click();
       await page.waitForTimeout(1000);
@@ -41,7 +37,7 @@ export async function scrapeAdsCSVReport(
       if (dateRange === "this_month") dateOptionText = "This month";
       if (dateRange === "last_month") dateOptionText = "Last month";
 
-      const option = page.locator(`text=${dateOptionText}`).first();
+      const option = page.locator(`text=${dateOptionText}`).last();
       if (await option.isVisible()) {
         await option.click();
         await page.waitForTimeout(3000); // Wait for table refresh
@@ -51,13 +47,13 @@ export async function scrapeAdsCSVReport(
     // 2. Trigger CSV Export Download
     console.log("📥 Initiating CSV Export Download...");
     // Find the export dropdown button
-    const exportTrigger = page.locator("button[aria-label='Export'], button:has-text('Export')").first();
+    const exportTrigger = page.locator("div[role='button']:has-text('Export'), button:has-text('Export')").first();
     await exportTrigger.waitFor({ state: "visible", timeout: 15000 });
     await exportTrigger.click();
     await page.waitForTimeout(1000);
 
     // Locate the specific export option
-    const csvOption = page.locator("text=Export table data, text=Export as CSV, text=CSV").first();
+    const csvOption = page.locator("div[role='menuitem']:has-text('Export as CSV'), div[role='menuitem']:has-text('Export table data'), text=Export as CSV").first();
     await csvOption.waitFor({ state: "visible", timeout: 5000 });
 
     // Setup listener to capture the downloaded file
@@ -76,8 +72,5 @@ export async function scrapeAdsCSVReport(
     throw error;
   } finally {
     await context.close();
-    if (fs.existsSync(tempProfilePath)) {
-      fs.rmSync(tempProfilePath, { recursive: true, force: true });
-    }
   }
 }

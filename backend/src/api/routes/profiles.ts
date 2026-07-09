@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { db } from "../../db/db.js";
 import { socialProfiles } from "../../db/schema.js";
 import { authenticate, authorizeCompanyAccess, authorizeCompanyAdmin } from "../middleware/auth.js";
+import { browserQueue } from "../../queue/queue.js";
 import { eq, and } from "drizzle-orm";
 import { launchBrowserWithProfile } from "../../workers/utils/browserLauncher.js";
 import fs from "fs";
@@ -293,6 +294,88 @@ export async function profileRoutes(fastify: FastifyInstance) {
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({ error: "Failed to disconnect profile" });
+    }
+  });
+
+  // 7. SYNC DMS (QUEUE JOB)
+  fastify.post("/sync-dms", { preHandler: [authorizeCompanyAccess] }, async (request, reply) => {
+    const companyId = request.headers["x-company-id"] as string;
+
+    try {
+      const profilesToScrape = await db
+        .select()
+        .from(socialProfiles)
+        .where(
+          and(
+            eq(socialProfiles.companyId, companyId),
+            eq(socialProfiles.status, "connected")
+          )
+        );
+
+      if (profilesToScrape.length === 0) {
+        return reply.status(400).send({ error: "No connected profiles found." });
+      }
+
+      const queuedJobs = [];
+
+      for (const profile of profilesToScrape) {
+        const jobId = `scan_dms_${profile.id}_${Date.now()}`;
+        const job = await browserQueue.add(
+          jobId,
+          {
+            type: "scan_dms",
+            profileId: profile.id
+          },
+          { jobId }
+        );
+        queuedJobs.push({ profileId: profile.id, platform: profile.platform, jobId: job.id });
+      }
+
+      return reply.send({ message: "DM sync triggered successfully", queuedJobs });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Failed to trigger DM sync" });
+    }
+  });
+
+  // 8. SYNC COMMENTS (QUEUE JOB)
+  fastify.post("/sync-comments", { preHandler: [authorizeCompanyAccess] }, async (request, reply) => {
+    const companyId = request.headers["x-company-id"] as string;
+
+    try {
+      const profilesToScrape = await db
+        .select()
+        .from(socialProfiles)
+        .where(
+          and(
+            eq(socialProfiles.companyId, companyId),
+            eq(socialProfiles.status, "connected")
+          )
+        );
+
+      if (profilesToScrape.length === 0) {
+        return reply.status(400).send({ error: "No connected profiles found." });
+      }
+
+      const queuedJobs = [];
+
+      for (const profile of profilesToScrape) {
+        const jobId = `crawl_comments_${profile.id}_${Date.now()}`;
+        const job = await browserQueue.add(
+          jobId,
+          {
+            type: "crawl_comments",
+            profileId: profile.id
+          },
+          { jobId }
+        );
+        queuedJobs.push({ profileId: profile.id, platform: profile.platform, jobId: job.id });
+      }
+
+      return reply.send({ message: "Comment sync triggered successfully", queuedJobs });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Failed to trigger comment sync" });
     }
   });
 }

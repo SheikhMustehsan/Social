@@ -24,7 +24,7 @@ connection.on("error", (err) => {
   console.warn("⚠️ [Redis Offline] Background job scheduling queue is disabled. Fastify is running in API-only mode.");
 });
 
-export const postingQueue = new Queue("posting-queue", {
+export const browserQueue = new Queue("browser-queue", {
   connection,
   defaultJobOptions: {
     attempts: 3, // Retry failed browser jobs up to 3 times

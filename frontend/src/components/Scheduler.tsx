@@ -32,7 +32,7 @@ interface SchedulerProps {
 export default function Scheduler({ token, companyId, isAdmin }: SchedulerProps) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [postsQueue, setPostsQueue] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
 
   // Form State
   const [selectedProfileIds, setSelectedProfileIds] = useState<string[]>([]);

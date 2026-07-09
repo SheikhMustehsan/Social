@@ -64,10 +64,9 @@ export async function publishToTikTok(
       await page.keyboard.press("Backspace");
       await page.waitForTimeout(500);
 
-      for (const char of caption) {
-        await page.keyboard.write(char);
-        await page.waitForTimeout(Math.floor(Math.random() * 60) + 30);
-      }
+      await captionEditor.click();
+      await page.keyboard.insertText(caption);
+      await page.waitForTimeout(2000);
     } else {
       console.warn("⚠️ Could not find caption text editor box, using keyboard fallback.");
     }

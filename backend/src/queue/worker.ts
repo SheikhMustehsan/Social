@@ -10,143 +10,157 @@ import { publishToInstagram } from "../workers/publishers/instagram.js";
 import { connection } from "./queue.js";
 import fs from "fs";
 
+import { scrapeAdsCSVReport } from "../workers/scrapers/adsScraper.js";
+import { crawlAndReplyComments } from "../workers/moderation/commentCrawler.js";
+import { scanInboxOnce } from "../workers/moderation/dmListener.js";
+
 interface JobData {
-  postId: string;
+  type: "publish_post" | "scrape_ads" | "crawl_comments" | "scan_dms";
+  postId?: string;
+  profileId?: string;
+  dateRange?: "last_30_days" | "this_month" | "last_month";
+  postUrl?: string;
 }
 
-// Instantiate the BullMQ Worker to process social posting tasks
-export const postingWorker = new Worker(
-  "posting-queue",
+// Instantiate the BullMQ Worker to process headed browser tasks
+export const browserWorker = new Worker(
+  "browser-queue",
   async (job: Job<JobData>) => {
-    const { postId } = job.data;
-    console.log(`🤖 Processing Job ${job.id} for Post ID: ${postId}`);
+    const { type } = job.data;
+    console.log(`🤖 Processing Job ${job.id} of type: ${type}`);
 
-    // 1. Retrieve post and profile information from database
-    const postRecord = await db
-      .select({
-        post: posts,
-        profile: socialProfiles,
-      })
-      .from(posts)
-      .innerJoin(socialProfiles, eq(posts.socialProfileId, socialProfiles.id))
-      .where(eq(posts.id, postId))
-      .limit(1);
+    // If it's a posting job
+    if (type === "publish_post") {
+      const { postId } = job.data;
+      if (!postId) return;
+      
+      const postRecord = await db
+        .select({
+          post: posts,
+          profile: socialProfiles,
+        })
+        .from(posts)
+        .innerJoin(socialProfiles, eq(posts.socialProfileId, socialProfiles.id))
+        .where(eq(posts.id, postId))
+        .limit(1);
 
-    if (postRecord.length === 0) {
-      console.warn(`⚠️ Post ${postId} not found in database. Skipping job.`);
-      return;
-    }
-
-    const { post, profile } = postRecord[0];
-
-    if (post.status === "published") {
-      console.log(`⚠️ Post ${postId} is already published. Skipping.`);
-      return;
-    }
-
-    // Update status to publishing
-    await db.update(posts).set({ status: "publishing" }).where(eq(posts.id, postId));
-
-    // The server has no display of its own, so profiles are linked via an uploaded
-    // Playwright storageState (cookies + localStorage) captured on a machine that does
-    // have a display, rather than a live Chrome user-data-dir synced from this machine.
-    if (!fs.existsSync(profile.chromeProfilePath)) {
-      const err = new Error(
-        `Session file not found on server: ${profile.chromeProfilePath}. Please re-link this profile by uploading a fresh session file.`
-      );
-      await db.update(posts).set({ status: "failed", errorMessage: err.message }).where(eq(posts.id, postId));
-      await db.update(socialProfiles).set({ status: "error" }).where(eq(socialProfiles.id, profile.id));
-      throw err;
-    }
-
-    const isDirectory = fs.lstatSync(profile.chromeProfilePath).isDirectory();
-    console.log(`🚀 Loading browser context using: ${isDirectory ? "Persistent User Data Profile" : "Storage State JSON"}`);
-
-    // Route headed Chromium display output to our permanent server Xvfb framebuffer daemon
-    process.env.DISPLAY = ":99";
-
-    const context = isDirectory
-      ? await launchBrowserWithProfile(profile.chromeProfilePath, { headless: false })
-      : await launchBrowserWithStorageState(profile.chromeProfilePath, { headless: false });
-
-    try {
-      // 2. Dispatch to correct Platform Publisher
-      const mediaList = post.mediaUrls as string[];
-
-      if (profile.platform === "facebook") {
-        await publishToFacebookSuite(context, post.caption || "", mediaList, ["facebook"], profile.profileId || undefined);
-      } else if (profile.platform === "instagram") {
-        await publishToInstagram(context, post.caption || "", mediaList);
-      } else if (profile.platform === "linkedin") {
-        await publishToLinkedIn(context, post.caption || "", mediaList, profile.profileId || undefined);
-      } else if (profile.platform === "tiktok") {
-        if (!mediaList || mediaList.length === 0) {
-          throw new Error("TikTok requires a video file attachment to post");
-        }
-        await publishToTikTok(context, post.caption || "", mediaList[0]);
-      } else {
-        throw new Error(`Unsupported platform type: ${profile.platform}`);
+      if (postRecord.length === 0) {
+        console.warn(`⚠️ Post ${postId} not found in database. Skipping job.`);
+        return;
       }
 
-      // 3. Success database update
-      await db.update(posts).set({
-        status: "published",
-        publishedAt: new Date(),
-        errorMessage: null,
-      }).where(eq(posts.id, postId));
+      const { post, profile } = postRecord[0];
 
-      // A successful publish proves the linked session is healthy again
-      if (profile.status !== "connected") {
-        await db.update(socialProfiles).set({ status: "connected" }).where(eq(socialProfiles.id, profile.id));
+      if (post.status === "published") {
+        console.log(`⚠️ Post ${postId} is already published. Skipping.`);
+        return;
       }
 
-      // Save/persist the updated browser storage state back to disk (only for JSON storageState profiles)
-      // Persistent browser profiles automatically save cookies to disk in real-time
-      if (!isDirectory) {
-        try {
-          console.log(`💾 Saving updated session state back to: ${profile.chromeProfilePath}`);
-          await context.storageState({ path: profile.chromeProfilePath });
-          console.log(`✅ Session state saved successfully.`);
-        } catch (err: any) {
-          console.error(`⚠️ Failed to save updated storage state:`, err.message);
-        }
-      } else {
-        console.log(`💾 Persistent profile handles its own session state storage natively.`);
-      }
+      await db.update(posts).set({ status: "publishing" }).where(eq(posts.id, postId));
 
-      console.log(`🎉 Job succeeded! Post ${postId} is published.`);
-    } catch (err: any) {
-      console.error(`❌ Job failed for Post ${postId}:`, err.message);
-
-      // Take a general failure screenshot so we can see what the browser saw
-      const errorScreenshot = `error_general_${profile.platform}_${Date.now()}.png`;
-      try {
-        const pages = context.pages();
-        if (pages.length > 0) {
-          const lastPage = pages[pages.length - 1];
-          await lastPage.screenshot({ path: errorScreenshot, fullPage: true });
-          console.log(`📸 Saved failure screenshot to: ${errorScreenshot}`);
-          err.message = `${err.message} (Saved screenshot to ${errorScreenshot})`;
-        }
-      } catch (screenshotErr: any) {
-        console.error("⚠️ Failed to capture error screenshot:", screenshotErr.message);
-      }
-
-      // Update database with failure log
-      await db.update(posts).set({
-        status: "failed",
-        errorMessage: err.message,
-      }).where(eq(posts.id, postId));
-
-      // Flag the profile itself so Connected Profiles stops showing a stale "connected" badge
-      if (/session expired|login session/i.test(err.message || "")) {
+      if (!fs.existsSync(profile.chromeProfilePath)) {
+        const err = new Error(`Session file not found on server: ${profile.chromeProfilePath}. Please re-link this profile by uploading a fresh session file.`);
+        await db.update(posts).set({ status: "failed", errorMessage: err.message }).where(eq(posts.id, postId));
         await db.update(socialProfiles).set({ status: "error" }).where(eq(socialProfiles.id, profile.id));
+        throw err;
       }
 
-      throw err; // Rethrow to let BullMQ handle attempts/backoff
-    } finally {
-      // Closing the context also closes the underlying browser (see browserLauncher.ts)
-      await context.close().catch(() => {});
+      const isDirectory = fs.lstatSync(profile.chromeProfilePath).isDirectory();
+      process.env.DISPLAY = ":99";
+
+      const context = isDirectory
+        ? await launchBrowserWithProfile(profile.chromeProfilePath, { headless: false })
+        : await launchBrowserWithStorageState(profile.chromeProfilePath, { headless: false });
+
+      try {
+        const mediaList = post.mediaUrls as string[];
+
+        if (profile.platform === "facebook") {
+          await publishToFacebookSuite(context, post.caption || "", mediaList, ["facebook"], profile.profileId || undefined);
+        } else if (profile.platform === "instagram") {
+          await publishToInstagram(context, post.caption || "", mediaList);
+        } else if (profile.platform === "linkedin") {
+          await publishToLinkedIn(context, post.caption || "", mediaList, profile.profileId || undefined);
+        } else if (profile.platform === "tiktok") {
+          if (!mediaList || mediaList.length === 0) {
+            throw new Error("TikTok requires a video file attachment to post");
+          }
+          await publishToTikTok(context, post.caption || "", mediaList[0]);
+        } else {
+          throw new Error(`Unsupported platform type: ${profile.platform}`);
+        }
+
+        await db.update(posts).set({
+          status: "published",
+          publishedAt: new Date(),
+          errorMessage: null,
+        }).where(eq(posts.id, postId));
+
+        if (profile.status !== "connected") {
+          await db.update(socialProfiles).set({ status: "connected" }).where(eq(socialProfiles.id, profile.id));
+        }
+
+        if (!isDirectory) {
+          try {
+            await context.storageState({ path: profile.chromeProfilePath });
+          } catch (err: any) {}
+        }
+
+        console.log(`🎉 Job succeeded! Post ${postId} is published.`);
+      } catch (err: any) {
+        console.error(`❌ Job failed for Post ${postId}:`, err.message);
+
+        const errorScreenshot = `error_general_${profile.platform}_${Date.now()}.png`;
+        try {
+          const pages = context.pages();
+          if (pages.length > 0) {
+            const lastPage = pages[pages.length - 1];
+            await lastPage.screenshot({ path: errorScreenshot, fullPage: true });
+            err.message = `${err.message} (Saved screenshot to ${errorScreenshot})`;
+          }
+        } catch (screenshotErr: any) {}
+
+        await db.update(posts).set({
+          status: "failed",
+          errorMessage: err.message,
+        }).where(eq(posts.id, postId));
+
+        if (/session expired|login session/i.test(err.message || "")) {
+          await db.update(socialProfiles).set({ status: "error" }).where(eq(socialProfiles.id, profile.id));
+        }
+
+        throw err;
+      } finally {
+        await context.close().catch(() => {});
+      }
+    } 
+    // If it's a scraping or moderation job
+    else if (type === "scrape_ads" || type === "crawl_comments" || type === "scan_dms") {
+      const { profileId, dateRange, postUrl } = job.data;
+      if (!profileId) return;
+      
+      const profileRecord = await db.select().from(socialProfiles).where(eq(socialProfiles.id, profileId)).limit(1);
+      if (profileRecord.length === 0) return;
+      const profile = profileRecord[0];
+      
+      if (!fs.existsSync(profile.chromeProfilePath)) {
+        throw new Error(`Session file not found on server: ${profile.chromeProfilePath}.`);
+      }
+
+      if (type === "scrape_ads") {
+        // Find the adAccountId dynamically! Wait, we will add it to DB later.
+        // For now, we will just call scrapeAdsCSVReport.
+        // Wait, how do we pass adAccountId? It will be in the DB.
+        // Let's just type cast it for now, assuming we will add it to the DB schema in the next step.
+        const adAccountId = (profile as any).adAccountId;
+        if (!adAccountId) throw new Error("No Ad Account ID linked to this profile.");
+        await scrapeAdsCSVReport(profile.chromeProfilePath, adAccountId, dateRange);
+      } else if (type === "crawl_comments") {
+        if (!postUrl) throw new Error("postUrl required for crawl_comments");
+        await crawlAndReplyComments(profile.chromeProfilePath, postUrl);
+      } else if (type === "scan_dms") {
+        await scanInboxOnce(profile.chromeProfilePath, profile.platform as any);
+      }
     }
   },
   {
@@ -155,14 +169,14 @@ export const postingWorker = new Worker(
   }
 );
 
-postingWorker.on("completed", (job) => {
+browserWorker.on("completed", (job) => {
   console.log(`✅ Queue Job ${job.id} completed.`);
 });
 
-postingWorker.on("failed", (job, err) => {
+browserWorker.on("failed", (job, err) => {
   console.error(`❌ Queue Job ${job?.id} failed with error:`, err.message);
 });
 
-postingWorker.on("error", (err) => {
+browserWorker.on("error", (err) => {
   console.warn("⚠️ BullMQ Worker connection error:", err.message);
 });
