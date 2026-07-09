@@ -9,6 +9,7 @@ import { schedulerRoutes } from "./api/routes/scheduler.js";
 import { profileRoutes } from "./api/routes/profiles.js";
 import { analyticsRoutes } from "./api/routes/analytics.js";
 import { uploadRoutes } from "./api/routes/upload.js";
+import { moderationRoutes } from "./api/routes/moderation.js";
 
 // Load background workers
 import "./queue/worker.js";
@@ -44,6 +45,7 @@ await fastify.register(schedulerRoutes, { prefix: "/api/scheduler" });
 await fastify.register(profileRoutes, { prefix: "/api/profiles" });
 await fastify.register(analyticsRoutes, { prefix: "/api/analytics" });
 await fastify.register(uploadRoutes, { prefix: "/api/scheduler" });
+await fastify.register(moderationRoutes, { prefix: "/api/moderation" });
 
 // Basic Health Check
 fastify.get("/health", async (request, reply) => {

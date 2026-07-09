@@ -2,13 +2,31 @@ import { BrowserContext } from "playwright";
 import { launchBrowserWithProfile } from "../utils/browserLauncher.js";
 import path from "path";
 import fs from "fs";
+import { db } from "../../db/db.js";
+import { moderationRules } from "../../db/schema.js";
+import { eq, and } from "drizzle-orm";
 
 export async function scanInboxOnce(
   profilePath: string,
   platform: "instagram" | "facebook",
-  autoReplyRules: { trigger: string; reply: string }[] = []
+  socialProfileId: string
 ): Promise<number> {
   process.env.DISPLAY = ":99";
+
+  let rules: any[] = [];
+  try {
+    rules = await db.select()
+      .from(moderationRules)
+      .where(
+        and(
+          eq(moderationRules.socialProfileId, socialProfileId),
+          eq(moderationRules.type, "dm")
+        )
+      );
+  } catch (e) {
+    console.warn("Failed to fetch moderation rules:", e);
+  }
+
   const context = await launchBrowserWithProfile(profilePath, { headless: false });
   const page = await context.newPage();
   let repliesSent = 0;
@@ -48,31 +66,35 @@ export async function scanInboxOnce(
         console.log(`💬 Last message text: "${incomingText}"`);
 
         // Process Auto-Reply Rules
-        let replyMessage = "Hello! Thanks for writing to us. A representative will get back to you shortly.";
-        
+        let replyToUse = null;
         if (incomingText) {
-          const matchedRule = autoReplyRules.find(rule => 
-            incomingText.toLowerCase().includes(rule.trigger.toLowerCase())
-          );
-          if (matchedRule) {
-            replyMessage = matchedRule.reply;
-            console.log(`🎯 Match found for trigger "${matchedRule.trigger}"`);
+          for (const rule of rules) {
+            if (rule.triggerKeyword !== "*" && incomingText.toLowerCase().includes(rule.triggerKeyword.toLowerCase())) {
+              replyToUse = rule.replyText;
+              break;
+            }
           }
         }
+        if (!replyToUse) {
+          const fallbackRule = rules.find(r => r.triggerKeyword === "*");
+          if (fallbackRule) replyToUse = fallbackRule.replyText;
+        }
 
-        // Type and Send Reply
-        console.log(`✉️ Sending reply: "${replyMessage}"`);
-        const msgInput = page.locator("textarea[placeholder*='Message...'], [role='textbox']").first();
-        if (await msgInput.isVisible()) {
-          await msgInput.focus();
-          await page.keyboard.insertText(replyMessage);
-          await page.waitForTimeout(500);
-          
-          // Press Enter to send, or click "Send" button
-          await page.keyboard.press("Enter");
-          console.log("✅ Message sent successfully!");
-          repliesSent++;
-          await page.waitForTimeout(2000);
+        if (replyToUse) {
+          const msgInput = page.locator("textarea[placeholder*='Message...'], [role='textbox']").first();
+          if (await msgInput.isVisible()) {
+            await msgInput.focus();
+            await page.keyboard.insertText(replyToUse);
+            await page.waitForTimeout(500);
+
+            // Press Enter to send
+            await page.keyboard.press("Enter");
+            console.log("✅ Message sent successfully!");
+            repliesSent++;
+            await page.waitForTimeout(2000);
+          }
+        } else {
+          console.log(`💬 No rule matched, skipping reply.`);
         }
       }
     } else {

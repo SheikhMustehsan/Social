@@ -156,10 +156,14 @@ export const browserWorker = new Worker(
         if (!adAccountId) throw new Error("No Ad Account ID linked to this profile.");
         await scrapeAdsCSVReport(profile.chromeProfilePath, adAccountId, dateRange);
       } else if (type === "crawl_comments") {
-        if (!postUrl) throw new Error("postUrl required for crawl_comments");
-        await crawlAndReplyComments(profile.chromeProfilePath, postUrl);
+        let url = postUrl;
+        if (!url) {
+          // If no specific postUrl provided, crawl the profile page
+          url = profile.platform === 'facebook' ? `https://facebook.com/${profile.profileId}` : `https://instagram.com/${profile.profileId}`;
+        }
+        await crawlAndReplyComments(profile.chromeProfilePath, url, profile.id);
       } else if (type === "scan_dms") {
-        await scanInboxOnce(profile.chromeProfilePath, profile.platform as any);
+        await scanInboxOnce(profile.chromeProfilePath, profile.platform as any, profile.id);
       }
     }
   },

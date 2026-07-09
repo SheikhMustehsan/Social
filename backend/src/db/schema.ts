@@ -161,3 +161,25 @@ export const adsAnalyticsRelations = relations(adsAnalytics, ({ one }) => ({
     references: [companies.id],
   }),
 }));
+
+export const moderationRules = sqliteTable("moderation_rules", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  companyId: text("company_id").references(() => companies.id).notNull(),
+  socialProfileId: text("social_profile_id").references(() => socialProfiles.id), // Nullable for global rules
+  platform: text("platform"), // 'facebook', 'instagram', 'linkedin', 'tiktok', etc.
+  type: text("type").notNull(), // 'comment' | 'dm'
+  triggerKeyword: text("trigger_keyword").notNull(), // Keyword to look for (or '*' for fallback)
+  replyText: text("reply_text").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()).notNull(),
+});
+
+export const moderationRulesRelations = relations(moderationRules, ({ one }) => ({
+  company: one(companies, {
+    fields: [moderationRules.companyId],
+    references: [companies.id],
+  }),
+  socialProfile: one(socialProfiles, {
+    fields: [moderationRules.socialProfileId],
+    references: [socialProfiles.id],
+  }),
+}));

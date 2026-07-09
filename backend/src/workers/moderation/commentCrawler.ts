@@ -2,6 +2,9 @@ import { BrowserContext } from "playwright";
 import { launchBrowserWithProfile } from "../utils/browserLauncher.js";
 import path from "path";
 import fs from "fs";
+import { db } from "../../db/db.js";
+import { moderationRules } from "../../db/schema.js";
+import { eq, and } from "drizzle-orm";
 
 interface Comment {
   id: string;
@@ -11,11 +14,25 @@ interface Comment {
 
 export async function crawlAndReplyComments(
   profilePath: string,
-  postUrl: string,
-  autoReplyText: string = "Thank you for your comment! Check your DMs.",
+  profileUrl: string,
+  socialProfileId: string,
+  maxPostsToCrawl: number = 3,
   likeNewComments: boolean = true
 ): Promise<Comment[]> {
   process.env.DISPLAY = ":99";
+  
+  let rules: any[] = [];
+  try {
+    // Assuming socialProfileId is needed, normally passed as an arg or derived
+    rules = await db.select()
+      .from(moderationRules)
+      .where(
+        eq(moderationRules.type, "comment")
+      );
+  } catch (e) {
+    console.warn("Failed to fetch moderation rules:", e);
+  }
+
   const context = await launchBrowserWithProfile(profilePath, { headless: false });
   const page = await context.newPage();
   
@@ -53,6 +70,7 @@ export async function crawlAndReplyComments(
         console.log(`  [Comment Found] ${authorText.trim()}: ${commentText.trim()}`);
         
         // Auto-Like action
+        const likeNewComments = true; // default setting
         if (likeNewComments) {
           // Find like button within this comment container (usually an SVG icon with heart role/label)
           const likeBtn = node.locator("button[aria-label='Like'], svg[aria-label='Like']").first();
@@ -63,8 +81,21 @@ export async function crawlAndReplyComments(
           }
         }
 
+        // Determine if we should reply based on rules
+        let replyToUse = null;
+        for (const rule of rules) {
+          if (rule.triggerKeyword !== "*" && commentText.toLowerCase().includes(rule.triggerKeyword.toLowerCase())) {
+            replyToUse = rule.replyText;
+            break;
+          }
+        }
+        if (!replyToUse) {
+          const fallbackRule = rules.find(r => r.triggerKeyword === "*");
+          if (fallbackRule) replyToUse = fallbackRule.replyText;
+        }
+
         // Auto-Reply action
-        if (autoReplyText) {
+        if (replyToUse) {
           const replyBtn = node.locator("button:has-text('Reply')").first();
           if (await replyBtn.isVisible()) {
             await replyBtn.click();
@@ -74,7 +105,7 @@ export async function crawlAndReplyComments(
             const replyInput = page.locator("textarea[placeholder*='comment'], [role='textbox']").first();
             if (await replyInput.isVisible()) {
               await replyInput.focus();
-              await page.keyboard.insertText(autoReplyText);
+              await page.keyboard.insertText(replyToUse);
               await page.waitForTimeout(1000);
               
               // Click post button
