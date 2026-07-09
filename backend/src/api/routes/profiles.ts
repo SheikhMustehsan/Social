@@ -96,6 +96,8 @@ export async function profileRoutes(fastify: FastifyInstance) {
 
     try {
       console.log(`🖥️ Spawning headed browser session for: ${targetProfilePath}`);
+      // Ensure Xvfb display is targeted
+      process.env.DISPLAY = ":99";
       const context = await launchBrowserWithProfile(targetProfilePath, { headless: false });
       const page = await context.newPage();
 
