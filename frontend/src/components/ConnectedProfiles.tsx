@@ -116,10 +116,11 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
   const handleLaunchBrowser = async () => {
     setError("");
     setSuccess("");
-    if (useCustomPath && !chromeProfilePath.trim()) {
-      setError("Please select a Chrome profile path first.");
-      return;
-    }
+    // Let the backend generate a fresh profile if empty
+    // if (useCustomPath && !chromeProfilePath.trim()) {
+    //   setError("Please select a Chrome profile path first.");
+    //   return;
+    // }
 
     setLaunchingBrowser(true);
     setBrowserLaunchedMessage("Opening Chrome window... Please log in to your account, go to the page you want to connect, and CLOSE the Chrome browser window when done.");
