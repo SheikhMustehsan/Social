@@ -110,17 +110,15 @@ export async function profileRoutes(fastify: FastifyInstance) {
       else if (platform === "tiktok") targetUrl = "https://www.tiktok.com";
       page.goto(targetUrl).catch((e) => console.log(`Navigation to ${targetUrl} issue:`, e.message));
 
-      // Block response until user manually closes the Chromium browser window
-      await new Promise<void>((resolve) => {
-        context.on("close", () => {
-          resolve();
-        });
+      // Listen for the close event in the background to log it, but DO NOT block the HTTP response!
+      // This prevents Cloudflare from timing out the request (100s limit).
+      context.on("close", () => {
+        console.log(`🏁 Headed login browser closed. Profile session cookies synchronized.`);
       });
 
-      console.log(`🏁 Headed login browser closed. Profile session cookies synchronized.`);
       return reply.send({ 
         status: "success", 
-        message: "Browser closed and session updated.", 
+        message: "Browser window spawned. Please connect via VNC, complete your login, and manually close the browser.",
         chromeProfilePath: targetProfilePath 
       });
     } catch (error: any) {
