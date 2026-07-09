@@ -25,7 +25,6 @@ interface ConnectedProfilesProps {
 export default function ConnectedProfiles({ token, companyId, isAdmin }: ConnectedProfilesProps) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [discoveredProfiles, setDiscoveredProfiles] = useState<DiscoveredProfile[]>([]);
-  const [useCustomPath, setUseCustomPath] = useState(false);
   const [loading, setLoading] = useState(false);
   
   // Form State
@@ -38,32 +37,8 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
 
   const needsTargetPage = platform === "facebook" || platform === "linkedin";
 
-  // Session file upload (primary flow - the server has no display, so login happens
-  // locally via scripts/captureSession.ts and the resulting session file is uploaded here)
-  const [uploadedSessionPath, setUploadedSessionPath] = useState("");
-  const [uploadedFileName, setUploadedFileName] = useState("");
-  const [uploadingSession, setUploadingSession] = useState(false);
-
   const [launchingBrowser, setLaunchingBrowser] = useState(false);
   const [browserLaunchedMessage, setBrowserLaunchedMessage] = useState("");
-  const [sessionSource, setSessionSource] = useState<"upload" | "reuse">("upload");
-
-  // Get unique uploaded sessions from currently linked profiles
-  const reusableSessions = (() => {
-    const seen = new Set<string>();
-    const list: { name: string; platform: string; path: string }[] = [];
-    for (const p of profiles) {
-      if (p.chromeProfilePath && !seen.has(p.chromeProfilePath)) {
-        seen.add(p.chromeProfilePath);
-        list.push({
-          name: p.profileName,
-          platform: p.platform,
-          path: p.chromeProfilePath
-        });
-      }
-    }
-    return list;
-  })();
 
   useEffect(() => {
     if (companyId) {
@@ -102,7 +77,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
       if (response.ok) {
         const data = await response.json();
         setDiscoveredProfiles(data);
-        if (data.length > 0 && !useCustomPath) {
+        if (data.length > 0) {
           // Pre-populate with first discovered profile details
           setChromeProfilePath(data[0].path);
           setProfileName(data[0].name + (data[0].email ? ` (${data[0].email})` : ""));
@@ -116,12 +91,6 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
   const handleLaunchBrowser = async () => {
     setError("");
     setSuccess("");
-    // Let the backend generate a fresh profile if empty
-    // if (useCustomPath && !chromeProfilePath.trim()) {
-    //   setError("Please select a Chrome profile path first.");
-    //   return;
-    // }
-
     setLaunchingBrowser(true);
     setBrowserLaunchedMessage("Opening Chrome window... Please log in to your account, go to the page you want to connect, and CLOSE the Chrome browser window when done.");
 
@@ -135,7 +104,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
           "x-company-id": companyId,
         },
         body: JSON.stringify({
-          chromeProfilePath: useCustomPath ? chromeProfilePath : undefined,
+          chromeProfilePath: chromeProfilePath || undefined,
           platform,
         }),
       });
@@ -146,53 +115,11 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
       }
 
       setSuccess(`Login session updated successfully! Saving profile...`);
-      
-      // If we are not in manual path mode, automatically save/link the profile right now!
-      if (!useCustomPath) {
-        await saveProfile(data.chromeProfilePath);
-      }
     } catch (err: any) {
       setError(err.message || "Failed to connect to browser launcher service.");
     } finally {
       setLaunchingBrowser(false);
       setBrowserLaunchedMessage("");
-    }
-  };
-
-  const handleSessionFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setError("");
-    setSuccess("");
-    setUploadingSession(true);
-    setUploadedSessionPath("");
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const response = await fetch(`${API_BASE}/api/profiles/upload-session`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "x-company-id": companyId,
-        },
-        body: formData,
-      });
-
-      const data = await response.json();
-      if (response.ok) {
-        setUploadedSessionPath(data.sessionPath);
-        setUploadedFileName(file.name);
-      } else {
-        setError(data.error || "Failed to upload session file");
-      }
-    } catch (err) {
-      setError("Network error uploading session file");
-    } finally {
-      setUploadingSession(false);
-      e.target.value = "";
     }
   };
 
@@ -233,8 +160,6 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
         setProfileName("");
         setChromeProfilePath("");
         setTargetPageId("");
-        setUploadedSessionPath("");
-        setUploadedFileName("");
         fetchProfiles();
       } else {
         setError(data.error || "Failed to link profile");
@@ -263,27 +188,11 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
       return;
     }
 
-    if (useCustomPath) {
-      if (!chromeProfilePath.trim()) {
-        setError("Please enter a Chrome profile path.");
-        return;
-      }
-      await saveProfile(chromeProfilePath);
-    } else {
-      if (sessionSource === "reuse") {
-        if (!chromeProfilePath) {
-          setError("Please select an existing session to reuse.");
-          return;
-        }
-        await saveProfile(chromeProfilePath);
-      } else {
-        if (!uploadedSessionPath) {
-          setError("Please upload a session file first (capture it with the browser extension, or 'npm run capture-session').");
-          return;
-        }
-        await saveProfile(uploadedSessionPath);
-      }
+    if (!chromeProfilePath.trim()) {
+      setError("Please enter a Chrome profile path.");
+      return;
     }
+    await saveProfile(chromeProfilePath);
   };
 
   const handleDisconnect = async (profileId: string) => {
@@ -333,8 +242,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
         <div className="glass-panel" style={{ padding: "24px", height: "fit-content" }}>
         <h3>Link Social Account</h3>
         <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: "8px 0 20px" }}>
-          This server has no display, so it can't show you a login window. Log in once on your
-          own computer, then upload the resulting session file here.
+          Connect directly via VNC to securely log in to your social accounts on the server.
         </p>
 
         {error && <div className="auth-error-message">{error}</div>}
@@ -382,7 +290,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
             </select>
           </div>
 
-          {/* Target Page (Facebook/LinkedIn only - one login can manage many pages) */}
+          {/* Target Page */}
           {needsTargetPage && (
             <div className="form-group">
               <label className="glass-label">
@@ -408,189 +316,57 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
             </div>
           )}
 
-          {/* Session source toggle (only show if reusable sessions exist) */}
-          {!useCustomPath && reusableSessions.length > 0 && (
-            <div className="form-group" style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
-              <label className="glass-label">Session Source</label>
-              <div style={{ display: "flex", gap: "16px", marginTop: "6px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
-                  <input
-                    type="radio"
-                    name="sessionSource"
-                    checked={sessionSource === "upload"}
-                    onChange={() => {
-                      setSessionSource("upload");
-                      setChromeProfilePath("");
-                    }}
-                  />
-                  Upload a new file or ZIP
-                </label>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "13px" }}>
-                  <input
-                    type="radio"
-                    name="sessionSource"
-                    checked={sessionSource === "reuse"}
-                    onChange={() => {
-                      setSessionSource("reuse");
-                      if (reusableSessions.length > 0) {
-                        setChromeProfilePath(reusableSessions[0].path);
-                      }
-                    }}
-                  />
-                  Reuse an existing session
-                </label>
-              </div>
-            </div>
-          )}
-
-          {/* 1. Reuse existing session path dropdown */}
-          {!useCustomPath && sessionSource === "reuse" && reusableSessions.length > 0 && (
-            <div className="form-group" style={{ borderTop: sessionSource === "reuse" ? "none" : "1px solid var(--border-color)", paddingTop: "12px" }}>
-              <label className="glass-label">Select Reusable Profile Session</label>
+          {/* Advanced Path Selector */}
+          <div className="form-group" style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
+            <label className="glass-label">Chrome Session Profile</label>
+            {discoveredProfiles.length > 0 ? (
               <select
                 value={chromeProfilePath}
-                onChange={(e) => setChromeProfilePath(e.target.value)}
+                onChange={handleDiscoveredChange}
                 className="glass-input"
-                style={{ background: "rgba(0,0,0,0.2)" }}
+                style={{ background: "rgba(0,0,0,0.2)", marginBottom: "10px" }}
               >
-                {reusableSessions.map((s, idx) => (
-                  <option key={idx} value={s.path}>
-                    {s.name} ({s.platform === "facebook" ? "Facebook" : s.platform === "linkedin" ? "LinkedIn" : s.platform})
+                {discoveredProfiles.map((dp) => (
+                  <option key={dp.path} value={dp.path}>
+                    👤 {dp.name} {dp.email ? `(${dp.email})` : ""}
                   </option>
                 ))}
               </select>
-              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px" }}>
-                This will link the new profile to the same browser session folder on the server. You don't need to re-upload the ZIP file.
-              </p>
-            </div>
-          )}
-
-          {/* 2. Session file upload (primary flow) */}
-          {!useCustomPath && sessionSource === "upload" && (
-            <div className="form-group" style={{ borderTop: reusableSessions.length > 0 ? "none" : "1px solid var(--border-color)", paddingTop: "12px" }}>
-              <label className="glass-label">Session File</label>
-              <p style={{ fontSize: "11px", color: "var(--text-muted)", marginBottom: "8px", lineHeight: "1.5" }}>
-                <strong>No code needed:</strong> install the Session Capture browser extension
-                (<code>browser-extension/</code> folder — load it unpacked via
-                chrome://extensions), log in to {platform}, click the extension, then upload the
-                file it downloads below.
-                <br />
-                <em>Have the codebase instead?</em> Run{" "}
-                <code>cd backend &amp;&amp; npm run capture-session -- {platform}</code> and
-                upload the resulting <code>session_*.json</code> file.
-              </p>
+            ) : (
               <input
-                type="file"
-                accept=".json,.zip,application/json,application/zip,application/x-zip-compressed"
-                onChange={handleSessionFileChange}
-                disabled={uploadingSession}
+                type="text"
                 className="glass-input"
+                placeholder="C:\Users\username\AppData\Local\Google\Chrome\User Data\Profile 1"
+                value={chromeProfilePath}
+                onChange={(e) => setChromeProfilePath(e.target.value)}
+                style={{ marginBottom: "10px" }}
               />
-              {uploadingSession && (
-                <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "6px" }}>Uploading...</p>
-              )}
-              {uploadedFileName && !uploadingSession && (
-                <p style={{ fontSize: "12px", color: "var(--color-success)", marginTop: "6px" }}>
-                  ✓ {uploadedFileName} uploaded
-                </p>
-              )}
-              
-              <div style={{
-                fontSize: "11px",
-                color: "#e2e8f0",
-                background: "rgba(255, 255, 255, 0.03)",
-                border: "1px solid var(--border-color)",
-                padding: "14px",
-                borderRadius: "6px",
-                marginTop: "14px",
-                lineHeight: "1.5"
-              }}>
-                <div style={{ fontWeight: "bold", color: "#60a5fa", marginBottom: "6px" }}>
-                  💡 Permanent Solution for LinkedIn & Facebook (Browser Profile Upload):
-                </div>
-                To bypass device-binding and IP-fingerprint blocks completely, you can upload your entire Chrome browser profile as a <strong>.zip</strong> archive instead of a JSON file:
-                <ol style={{ paddingLeft: "16px", margin: "6px 0", display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <li>Create a <strong>new browser profile</strong> in Google Chrome.</li>
-                  <li>Log in to {platform} and navigate to your dashboard/page.</li>
-                  <li><strong>Close Chrome completely</strong> so it flushes all session files to disk.</li>
-                  <li>Locate the profile folder on your PC:
-                    <br />• <u>Windows:</u> <code>%LOCALAPPDATA%\Google\Chrome\User Data\&lt;Profile Name&gt;</code> (e.g. <code>Profile 1</code>)
-                    <br />• <u>macOS:</u> <code>~/Library/Application Support/Google/Chrome/&lt;Profile Name&gt;</code>
-                  </li>
-                  <li>Right-click that profile folder, select <strong>Compress to ZIP file</strong>, and upload it here.</li>
-                </ol>
-                <span style={{ color: "var(--text-muted)", fontSize: "10px" }}>
-                  * This sets up a permanent persistent browser state on the server that never conflicts with your active PC browser sessions.
-                </span>
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* Advanced Path Selector (Hidden by default) */}
-          {useCustomPath && (
-            <div className="form-group" style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>
-              <label className="glass-label">Chrome Session Profile (Advanced)</label>
-              {discoveredProfiles.length > 0 ? (
-                <select
-                  value={chromeProfilePath}
-                  onChange={handleDiscoveredChange}
-                  className="glass-input"
-                  style={{ background: "rgba(0,0,0,0.2)", marginBottom: "10px" }}
-                >
-                  {discoveredProfiles.map((dp) => (
-                    <option key={dp.path} value={dp.path}>
-                      👤 {dp.name} {dp.email ? `(${dp.email})` : ""}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  className="glass-input"
-                  placeholder="C:\Users\username\AppData\Local\Google\Chrome\User Data\Profile 1"
-                  value={chromeProfilePath}
-                  onChange={(e) => setChromeProfilePath(e.target.value)}
-                  style={{ marginBottom: "10px" }}
-                />
-              )}
-
-              <button
-                type="button"
-                className="glass-button"
-                style={{
-                  width: "100%",
-                  justifyContent: "center",
-                  borderColor: "var(--color-primary)",
-                  background: "rgba(99, 102, 241, 0.05)"
-                }}
-                onClick={handleLaunchBrowser}
-                disabled={launchingBrowser}
-              >
-                🔑 {launchingBrowser ? "Browser window active..." : "Step 1: Open Chrome and Log In"}
-              </button>
-            </div>
-          )}
-
-          {/* Action Trigger */}
-          {!useCustomPath ? (
             <button
-              type="submit"
-              className="glass-button primary animate-pulse"
-              style={{ justifyContent: "center", marginTop: "8px" }}
-              disabled={uploadingSession || (sessionSource === "upload" && !uploadedSessionPath) || (sessionSource === "reuse" && !chromeProfilePath)}
-            >
-              🚀 Link Channel
-            </button>
-          ) : (
-            <button 
-              type="submit" 
-              className="glass-button primary" 
-              style={{ justifyContent: "center", marginTop: "8px" }}
+              type="button"
+              className="glass-button"
+              style={{
+                width: "100%",
+                justifyContent: "center",
+                borderColor: "var(--color-primary)",
+                background: "rgba(99, 102, 241, 0.05)"
+              }}
+              onClick={handleLaunchBrowser}
               disabled={launchingBrowser}
             >
-              Step 2: Link Selected Channel
+              🔑 {launchingBrowser ? "Browser window active via VNC..." : "Step 1: Open Chrome via VNC"}
             </button>
-          )}
+          </div>
+
+          <button 
+            type="submit" 
+            className="glass-button primary" 
+            style={{ justifyContent: "center", marginTop: "8px" }}
+            disabled={launchingBrowser}
+          >
+            Step 2: Link Selected Channel
+          </button>
 
           {/* Browser banner guide */}
           {browserLaunchedMessage && (
@@ -608,29 +384,6 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
               ℹ️ {browserLaunchedMessage}
             </div>
           )}
-
-          {/* Toggle link */}
-          <div style={{ textAlign: "center", marginTop: "8px" }}>
-            <button
-              type="button"
-              onClick={() => {
-                setUseCustomPath(!useCustomPath);
-                setError("");
-                setSuccess("");
-                setChromeProfilePath("");
-              }}
-              style={{
-                background: "none",
-                border: "none",
-                color: "var(--color-primary)",
-                cursor: "pointer",
-                fontSize: "11px",
-                fontWeight: 600
-              }}
-            >
-              {useCustomPath ? "← Use session file upload (recommended)" : "⚙️ Legacy: auto-launch browser on this server (only works if it has a display)"}
-            </button>
-          </div>
         </form>
       </div>
     )}
