@@ -5,13 +5,13 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0',
+    host: '::',
     port: 5173,
     strictPort: true,
     allowedHosts: ['social.buzzintechhub.com', 'api.buzzintechhub.com'],
   },
   preview: {
-    host: '0.0.0.0',
+    host: '::',
     port: 5173,
     strictPort: true,
     allowedHosts: ['social.buzzintechhub.com', 'api.buzzintechhub.com'],
