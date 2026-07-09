@@ -113,8 +113,10 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
       if (!response.ok) {
         throw new Error(data.error || "Failed to update login session.");
       }
-
-      setSuccess(`Login session updated successfully! Saving profile...`);
+      if (data.chromeProfilePath) {
+        setChromeProfilePath(data.chromeProfilePath);
+      }
+      setSuccess(`Browser ready! Please complete login in VNC, close Chrome, and click Step 2.`);
     } catch (err: any) {
       setError(err.message || "Failed to connect to browser launcher service.");
     } finally {
