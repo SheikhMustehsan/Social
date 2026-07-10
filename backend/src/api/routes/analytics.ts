@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../../db/db.js";
-import { adsAnalytics, socialAnalytics } from "../../db/schema.js";
+import { adsAnalytics, socialAnalytics, socialProfiles } from "../../db/schema.js";
 import { authenticate, authorizeCompanyAccess } from "../middleware/auth.js";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { browserQueue } from "../../queue/queue.js";
