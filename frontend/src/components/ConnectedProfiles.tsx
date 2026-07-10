@@ -439,9 +439,29 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
                       Posts to: {p.profileId}
                     </p>
                   )}
-                  <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px", maxWidth: "400px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    Session: {p.chromeProfilePath}
-                  </p>
+                  <div style={{ marginTop: "4px", display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                    <p style={{ fontSize: "11px", color: "var(--text-muted)", wordBreak: "break-all", userSelect: "text" }}>
+                      Session: {p.chromeProfilePath}
+                    </p>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(p.chromeProfilePath);
+                        alert("Session path copied to clipboard!");
+                      }}
+                      style={{
+                        background: "var(--color-primary)",
+                        border: "none",
+                        color: "white",
+                        padding: "2px 6px",
+                        borderRadius: "4px",
+                        fontSize: "10px",
+                        cursor: "pointer",
+                        flexShrink: 0
+                      }}
+                    >
+                      Copy
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
