@@ -32,6 +32,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
   const [profileName, setProfileName] = useState("");
   const [chromeProfilePath, setChromeProfilePath] = useState("");
   const [targetPageId, setTargetPageId] = useState("");
+  const [adAccountId, setAdAccountId] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -153,6 +154,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
           profileName,
           chromeProfilePath: resolvedPath,
           profileId: needsTargetPage ? targetPageId.trim() : undefined,
+          adAccountId: adAccountId.trim() || undefined,
         }),
       });
 
@@ -162,6 +164,7 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
         setProfileName("");
         setChromeProfilePath("");
         setTargetPageId("");
+        setAdAccountId("");
         fetchProfiles();
       } else {
         setError(data.error || "Failed to link profile");
@@ -317,6 +320,23 @@ export default function ConnectedProfiles({ token, companyId, isAdmin }: Connect
               </p>
             </div>
           )}
+
+          {/* Ad Account ID (Optional) */}
+          <div className="form-group">
+            <label className="glass-label">
+              Ad Account ID (Optional)
+            </label>
+            <input
+              type="text"
+              className="glass-input"
+              placeholder="e.g. act_1234567890 (for fetching ads analytics)"
+              value={adAccountId}
+              onChange={(e) => setAdAccountId(e.target.value)}
+            />
+            <p style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+              If you want to sync Ads data, enter the Ad Account ID associated with this profile.
+            </p>
+          </div>
 
           {/* Advanced Path Selector */}
           <div className="form-group" style={{ borderTop: "1px solid var(--border-color)", paddingTop: "12px" }}>

@@ -216,7 +216,7 @@ export async function profileRoutes(fastify: FastifyInstance) {
   // 1. CONNECT / ADD A NEW SOCIAL PROFILE (Admin Only)
   fastify.post("/", { preHandler: [authorizeCompanyAdmin] }, async (request, reply) => {
     const companyId = request.headers["x-company-id"] as string;
-    const { platform, profileName, chromeProfilePath, profileId } = request.body as any;
+    const { platform, profileName, chromeProfilePath, profileId, adAccountId } = request.body as any;
 
     if (!platform || !profileName || !chromeProfilePath) {
       return reply.status(400).send({
@@ -246,6 +246,7 @@ export async function profileRoutes(fastify: FastifyInstance) {
         profileName,
         chromeProfilePath,
         profileId: profileId || null,
+        adAccountId: adAccountId || null,
         status: "connected",
       }).returning();
 
