@@ -85,14 +85,14 @@ export async function publishToFacebookSuite(
           const isFbOption = html.toLowerCase().includes("facebook");
           const isIgOption = html.toLowerCase().includes("instagram");
 
-          const isFbTarget = placements.includes("facebook") && isFbOption;
-          const isIgTarget = placements.includes("instagram") && isIgOption;
-          
-          // Fallback: If for some reason the HTML doesn't contain the platform name, use the text
-          const fallbackFbTarget = placements.includes("facebook") && text.includes(pageIdentifier || "Buzzin Tech");
-          const fallbackIgTarget = placements.includes("instagram") && text.includes("Instagram");
+          // A single Business Manager can list multiple Facebook Pages (one per
+          // client company) - matching on "is this a Facebook option" alone isn't
+          // enough to pick the right one, it must also match the target Page name.
+          const nameMatches = pageIdentifier ? text.includes(pageIdentifier) : true;
+          const isFbTarget = placements.includes("facebook") && isFbOption && nameMatches;
+          const isIgTarget = placements.includes("instagram") && isIgOption && nameMatches;
 
-          const isTarget = isFbTarget || isIgTarget || (!isFbOption && !isIgOption && (fallbackFbTarget || fallbackIgTarget));
+          const isTarget = isFbTarget || isIgTarget;
 
           if (isTarget) targetFound = true;
 
@@ -123,6 +123,13 @@ export async function publishToFacebookSuite(
       }
 
       const comboboxText = (await postToCombobox.textContent().catch(() => "")) || "";
+      if (pageIdentifier && !comboboxText.includes(pageIdentifier)) {
+        const errorScreenshot = `error_meta_wrong_page_${Date.now()}.png`;
+        await page.screenshot({ path: errorScreenshot });
+        throw new Error(
+          `"Post to" shows "${comboboxText.trim()}", not "${pageIdentifier}". Saved screenshot to ${errorScreenshot}. Refusing to post to avoid publishing to the wrong Page.`
+        );
+      }
       console.log(`✅ Confirmed targeting Page dropdown text: ${comboboxText.trim()}`);
       // Give the composer workspace ample time to settle and re-render after switching the target Page
       await page.waitForTimeout(5000);
