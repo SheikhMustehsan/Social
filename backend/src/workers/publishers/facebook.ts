@@ -2,6 +2,10 @@ import { BrowserContext } from "playwright";
 import path from "path";
 import fs from "fs";
 
+// This project's tsconfig doesn't include the "dom" lib (page.evaluate callbacks run in
+// the browser, not Node), so DOM globals used inside them need a local declaration.
+declare const document: any;
+
 export async function publishToFacebookSuite(
   context: BrowserContext,
   caption: string,
@@ -13,32 +17,58 @@ export async function publishToFacebookSuite(
 
   try {
     console.log("➡️ Navigating to Meta Business Suite Composer...");
-    console.log("➡️ Establishing Meta Business Suite context via Home redirect...");
-    await page.goto("https://business.facebook.com/", {
-      waitUntil: "domcontentloaded",
-      timeout: 60000,
-    });
-    
-    // Wait for the redirect to establish business_id in the URL
-    await page.waitForURL(url => url.href.includes("business_id"), { timeout: 15000 }).catch(() => null);
-    
-    const currentUrl = page.url();
-    const urlObj = new URL(currentUrl);
-    const businessId = urlObj.searchParams.get("business_id");
-    const assetId = urlObj.searchParams.get("asset_id");
-    
+
+    let businessId: string | null = null;
+    let assetId: string | null = null;
+
+    // A single Meta login can belong to many separate Business Manager accounts (one
+    // per client). Landing on business.facebook.com/ and using whatever business_id the
+    // redirect happens to land on is unreliable - it's sticky to whichever business was
+    // last active, not tied to which client we're actually posting for. That caused a
+    // real incident: a post meant for one client's Page was published to a different
+    // client's Page instead. Look up the specific business that owns the target Page by
+    // name via the account switcher, so navigation is deterministic every time.
+    if (pageIdentifier) {
+      console.log(`🔎 Looking up Business Manager account for Page: ${pageIdentifier}`);
+      await page.goto("https://business.facebook.com/select", { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForTimeout(4000);
+
+      const businessLink = await page.evaluate((identifier: string) => {
+        const target = identifier.toLowerCase();
+        const links: any[] = Array.from(document.querySelectorAll("a[href*='business_id']"));
+        const match = links.find((el: any) => (el.textContent || "").toLowerCase().includes(target));
+        return match ? match.getAttribute("href") : null;
+      }, pageIdentifier);
+
+      if (businessLink) {
+        const parsed = new URL(businessLink, "https://business.facebook.com");
+        businessId = parsed.searchParams.get("business_id");
+        console.log(`💼 Found Business Manager account, business_id: ${businessId}`);
+      } else {
+        console.warn(`⚠️ Could not find a Business Manager account matching "${pageIdentifier}" in the account switcher.`);
+      }
+    }
+
+    if (!businessId) {
+      // Fallback: use whatever business context the generic Home redirect lands on.
+      console.log("➡️ Establishing Meta Business Suite context via Home redirect...");
+      await page.goto("https://business.facebook.com/", { waitUntil: "domcontentloaded", timeout: 60000 });
+      await page.waitForURL(url => url.href.includes("business_id"), { timeout: 15000 }).catch(() => null);
+      const urlObj = new URL(page.url());
+      businessId = urlObj.searchParams.get("business_id");
+      assetId = urlObj.searchParams.get("asset_id");
+    }
+
     let composerUrl = "https://business.facebook.com/latest/composer?ref=composer";
     if (businessId) {
-      console.log(`💼 Extracted business_id: ${businessId}`);
       composerUrl += `&business_id=${businessId}`;
       if (assetId) {
-        console.log(`📄 Extracted asset_id: ${assetId}`);
         composerUrl += `&asset_id=${assetId}`;
       }
     } else {
-      console.warn("⚠️ Could not extract business_id from redirect. Falling back to default composer URL.");
+      console.warn("⚠️ No business_id resolved. Falling back to default composer URL.");
     }
-    
+
     console.log(`➡️ Navigating to Meta Business Suite Composer: ${composerUrl}`);
     await page.goto(composerUrl, {
       waitUntil: "domcontentloaded",
@@ -88,7 +118,7 @@ export async function publishToFacebookSuite(
           // A single Business Manager can list multiple Facebook Pages (one per
           // client company) - matching on "is this a Facebook option" alone isn't
           // enough to pick the right one, it must also match the target Page name.
-          const nameMatches = pageIdentifier ? text.includes(pageIdentifier) : true;
+          const nameMatches = pageIdentifier ? text.toLowerCase().includes(pageIdentifier.toLowerCase()) : true;
           const isFbTarget = placements.includes("facebook") && isFbOption && nameMatches;
           const isIgTarget = placements.includes("instagram") && isIgOption && nameMatches;
 
@@ -123,7 +153,7 @@ export async function publishToFacebookSuite(
       }
 
       const comboboxText = (await postToCombobox.textContent().catch(() => "")) || "";
-      if (pageIdentifier && !comboboxText.includes(pageIdentifier)) {
+      if (pageIdentifier && !comboboxText.toLowerCase().includes(pageIdentifier.toLowerCase())) {
         const errorScreenshot = `error_meta_wrong_page_${Date.now()}.png`;
         await page.screenshot({ path: errorScreenshot });
         throw new Error(
