@@ -59,22 +59,21 @@ export async function publishToInstagram(
 
     // 3. Navigate through the modals (Crop -> Filter -> Caption)
     console.log("➡️ Navigating Crop modal...");
-    let nextBtn = dialog.locator('div[role="button"]:has-text("Next"), button:has-text("Next")').first();
+    let nextBtn = dialog.locator('div[role="button"]:has-text("Next"), button:has-text("Next")').last();
     await nextBtn.waitFor({ state: "visible", timeout: 5000 });
     await nextBtn.click({ force: true });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000); // Wait for Filters modal to render
 
     console.log("➡️ Navigating Filters modal...");
-    // Note: Playwright needs to click the newly rendered Next button
-    nextBtn = dialog.locator('div[role="button"]:has-text("Next"), button:has-text("Next")').first();
+    nextBtn = dialog.locator('div[role="button"]:has-text("Next"), button:has-text("Next")').last();
     await nextBtn.waitFor({ state: "visible", timeout: 5000 });
     await nextBtn.click({ force: true });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000); // Wait for Caption modal to render
 
     // 4. Type Caption
     console.log("➡️ Typing caption...");
-    // The Instagram caption box is a div with role textbox or aria-label "Write a caption..."
-    const captionBox = page.locator('div[aria-label="Write a caption..."], div[role="textbox"]').first();
+    // The Instagram caption box is a div with role textbox or aria-label "Write a caption..." or contenteditable
+    const captionBox = page.locator('div[aria-label="Write a caption..."], div[role="textbox"], div[contenteditable="true"]').last();
     await captionBox.waitFor({ state: "visible", timeout: 5000 });
     
     for (const char of caption) {
