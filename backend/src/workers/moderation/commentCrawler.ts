@@ -171,10 +171,10 @@ export async function crawlAndReplyComments(
           // Auto-Reply action
           if (replyToUse) {
             let replyBtn = null;
-            if (platform === "facebook") replyBtn = node.locator("div[role='button']:has-text('Reply'), span:has-text('Reply')").filter({ hasText: /^Reply$/i }).first();
-            else if (platform === "tiktok") replyBtn = node.locator("span:has-text('Reply'), div:has-text('Reply')").filter({ hasText: /^Reply$/i }).first();
+            if (platform === "facebook") replyBtn = node.locator("div[role='button']:has-text('Reply'), span:has-text('Reply')").first();
+            else if (platform === "tiktok") replyBtn = node.locator("span:has-text('Reply'), div:has-text('Reply')").first();
             else if (platform === "linkedin") replyBtn = node.locator("button.comments-comment-social-bar__reply-action, button:has-text('Reply')").first();
-            else replyBtn = node.locator("button:has-text('Reply'), span:has-text('Reply')").filter({ hasText: /^Reply$/i }).first();
+            else replyBtn = node.locator("button:has-text('Reply'), span:has-text('Reply')").first();
             
             if (replyBtn && await replyBtn.isVisible()) {
               await replyBtn.click();
@@ -199,6 +199,8 @@ export async function crawlAndReplyComments(
               
               console.log(`  ✉️ Replied to comment from ${authorText.trim()}`);
               await page.waitForTimeout(2000);
+            } else {
+              console.log(`  ⚠️ Reply button not visible for ${authorText.trim()}`);
             }
           }
         }
