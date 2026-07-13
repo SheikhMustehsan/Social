@@ -64,6 +64,24 @@ export default function OrganicDashboard({ token, companyId }: OrganicDashboardP
     }
   };
 
+  const handleManualSync = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/analytics/organic/sync`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "x-company-id": companyId }
+      });
+      if (res.ok) {
+        alert("Organic sync started! Check the Recent Background Jobs table for progress.");
+        fetchAnalytics(); // Refresh the table
+      } else {
+        const data = await res.json();
+        alert(data.error || "Failed to start sync");
+      }
+    } catch (e) {
+      alert("Network error starting sync");
+    }
+  };
+
   if (loading) return <div className="glass-panel">Loading Organic Data...</div>;
 
   return (
@@ -99,13 +117,22 @@ export default function OrganicDashboard({ token, companyId }: OrganicDashboardP
       <div className="glass-panel" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Growth Over Time</h3>
-          <button 
-            className="action-btn primary" 
-            onClick={() => window.open(`${API_BASE}/api/analytics/organic/csv?companyId=${companyId}&token=${token}`, "_blank")}
-            style={{ fontSize: "0.8rem", padding: "5px 15px" }}
-          >
-            📥 Download CSV
-          </button>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button 
+              className="action-btn secondary" 
+              onClick={handleManualSync}
+              style={{ fontSize: "0.8rem", padding: "5px 15px" }}
+            >
+              🔄 Run Manual Sync
+            </button>
+            <button 
+              className="action-btn primary" 
+              onClick={() => window.open(`${API_BASE}/api/analytics/organic/csv?companyId=${companyId}&token=${token}`, "_blank")}
+              style={{ fontSize: "0.8rem", padding: "5px 15px" }}
+            >
+              📥 Download CSV
+            </button>
+          </div>
         </div>
         
         {timeseries.length > 0 ? (
