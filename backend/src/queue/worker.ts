@@ -11,6 +11,7 @@ import { connection } from "./queue.js";
 import fs from "fs";
 
 import { scrapeAdsCSVReport } from "../workers/scrapers/adsScraper.js";
+import { parseAndSaveAdsCSV } from "../workers/scrapers/csvParser.js";
 import { crawlAndReplyComments } from "../workers/moderation/commentCrawler.js";
 import { scanInboxOnce } from "../workers/moderation/dmListener.js";
 
@@ -154,14 +155,15 @@ export const browserWorker = new Worker(
         // Let's just type cast it for now, assuming we will add it to the DB schema in the next step.
         const adAccountId = (profile as any).adAccountId;
         if (!adAccountId) throw new Error("No Ad Account ID linked to this profile.");
-        await scrapeAdsCSVReport(profile.chromeProfilePath, adAccountId, dateRange);
+        const csvPath = await scrapeAdsCSVReport(profile.chromeProfilePath, adAccountId, dateRange);
+        await parseAndSaveAdsCSV(csvPath, profile.companyId, profile.platform as "meta" | "tiktok" | "google" | "linkedin");
       } else if (type === "crawl_comments") {
         let url = postUrl;
         if (!url) {
           // If no specific postUrl provided, crawl the profile page
           url = profile.platform === 'facebook' ? `https://facebook.com/${profile.profileId}` : `https://instagram.com/${profile.profileId}`;
         }
-        await crawlAndReplyComments(profile.chromeProfilePath, url, profile.id);
+        await crawlAndReplyComments(profile.chromeProfilePath, url, profile.id, profile.companyId, profile.platform);
       } else if (type === "scan_dms") {
         await scanInboxOnce(profile.chromeProfilePath, profile.platform as any, profile.id);
       }

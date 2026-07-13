@@ -91,6 +91,7 @@ export const adsAnalytics = sqliteTable("ads_analytics", {
   platform: text("platform").notNull(), // 'meta', 'tiktok', 'google', 'linkedin'
   campaignName: text("campaign_name").notNull(),
   campaignId: text("campaign_id"),
+  currency: text("currency").default("USD").notNull(),
   date: integer("date", { mode: "timestamp" }).notNull(),
   spend: real("spend").default(0).notNull(),
   impressions: integer("impressions").default(0).notNull(),
