@@ -150,23 +150,34 @@ export const browserWorker = new Worker(
       }
 
       if (type === "scrape_ads") {
-        // Find the adAccountId dynamically! Wait, we will add it to DB later.
-        // For now, we will just call scrapeAdsCSVReport.
-        // Wait, how do we pass adAccountId? It will be in the DB.
-        // Let's just type cast it for now, assuming we will add it to the DB schema in the next step.
         const adAccountId = (profile as any).adAccountId;
         if (!adAccountId) throw new Error("No Ad Account ID linked to this profile.");
         const csvPath = await scrapeAdsCSVReport(profile.chromeProfilePath, adAccountId, dateRange);
         await parseAndSaveAdsCSV(csvPath, profile.companyId, profile.platform as "meta" | "tiktok" | "google" | "linkedin");
-      } else if (type === "crawl_comments") {
-        let url = postUrl;
-        if (!url) {
-          // If no specific postUrl provided, crawl the profile page
-          url = profile.platform === 'facebook' ? `https://facebook.com/${profile.profileId}` : `https://instagram.com/${profile.profileId}`;
+      } else if (type === "crawl_comments" || type === "scan_dms") {
+        // Log sync job start
+        const [jobLog] = await db.insert(syncJobs).values({
+          companyId: profile.companyId,
+          jobType: type,
+          status: "pending",
+          startedAt: new Date()
+        }).returning();
+
+        try {
+          if (type === "crawl_comments") {
+            let url = postUrl;
+            if (!url) {
+              url = profile.platform === 'facebook' ? `https://facebook.com/${profile.profileId}` : `https://instagram.com/${profile.profileId}`;
+            }
+            await crawlAndReplyComments(profile.chromeProfilePath, url, profile.id, profile.companyId, profile.platform);
+          } else if (type === "scan_dms") {
+            await scanInboxOnce(profile.chromeProfilePath, profile.platform as any, profile.id);
+          }
+          await db.update(syncJobs).set({ status: "success", completedAt: new Date() }).where(eq(syncJobs.id, jobLog.id));
+        } catch (err: any) {
+          console.error(`Error in ${type} for profile ${profile.id}:`, err);
+          await db.update(syncJobs).set({ status: "failed", errorMessage: err.message, completedAt: new Date() }).where(eq(syncJobs.id, jobLog.id));
         }
-        await crawlAndReplyComments(profile.chromeProfilePath, url, profile.id, (profile as any).companyId, profile.platform);
-      } else if (type === "scan_dms") {
-        await scanInboxOnce(profile.chromeProfilePath, profile.platform as any, profile.id);
       }
     } 
     // Handle global cron triggers

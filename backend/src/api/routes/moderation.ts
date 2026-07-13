@@ -1,8 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../../db/db.js";
-import { moderationRules, socialProfiles } from "../../db/schema.js";
+import { moderationRules, socialProfiles, syncJobs } from "../../db/schema.js";
 import { authenticate, authorizeCompanyAccess } from "../middleware/auth.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 
 export async function moderationRoutes(fastify: FastifyInstance) {
   fastify.addHook("preHandler", authenticate);
@@ -78,6 +78,30 @@ export async function moderationRoutes(fastify: FastifyInstance) {
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({ error: "Failed to delete moderation rule" });
+    }
+  });
+
+  // 4. GET RECENT MODERATION SYNC JOBS
+  fastify.get("/sync-jobs", { preHandler: [authorizeCompanyAccess] }, async (request, reply) => {
+    const companyId = request.headers["x-company-id"] as string;
+
+    try {
+      const jobs = await db
+        .select()
+        .from(syncJobs)
+        .where(
+          and(
+            eq(syncJobs.companyId, companyId),
+            inArray(syncJobs.jobType, ["scan_dms", "crawl_comments"])
+          )
+        )
+        .orderBy(desc(syncJobs.startedAt))
+        .limit(10);
+
+      return reply.send(jobs);
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Failed to fetch sync jobs" });
     }
   });
 }
