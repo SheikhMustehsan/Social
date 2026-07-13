@@ -8,7 +8,7 @@ import { eq, and } from "drizzle-orm";
 
 export async function scanInboxOnce(
   profilePath: string,
-  platform: "instagram" | "facebook",
+  platform: string,
   socialProfileId: string
 ): Promise<number> {
   process.env.DISPLAY = ":99";
@@ -32,32 +32,39 @@ export async function scanInboxOnce(
   let repliesSent = 0;
   
   try {
-    const inboxUrl = platform === "instagram" 
-      ? "https://www.instagram.com/direct/inbox/"
-      : "https://business.facebook.com/latest/inbox/all"; // Meta Business Suite unified inbox
+    const inboxUrl = platform === "instagram" ? "https://www.instagram.com/direct/inbox/"
+      : platform === "facebook" ? "https://business.facebook.com/latest/inbox/all"
+      : platform === "tiktok" ? "https://www.tiktok.com/messages"
+      : "https://www.linkedin.com/messaging/";
 
     console.log(`➡️ Inbox Listener: Navigating to DMs at ${inboxUrl}...`);
     await page.goto(inboxUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
     await page.waitForTimeout(5000);
 
-    // Instagram selector constants
-    const unreadConvoSelector = "div[style*='font-weight: 600'], div._ab8w._ab94._ab9f:has-text('Unread')"; // Matches unread threads
+    let unreadConvoSelector = "";
+    if (platform === "instagram") unreadConvoSelector = "div[style*='font-weight: 600'], div._ab8w._ab94._ab9f:has-text('Unread')";
+    else if (platform === "facebook") unreadConvoSelector = "div[style*='font-weight: bold']"; // Approximated
+    else if (platform === "tiktok") unreadConvoSelector = "li[data-e2e='message-item'] div[class*='Dot'], li[data-e2e='message-item']"; // Fallback to first if no dot
+    else if (platform === "linkedin") unreadConvoSelector = "li.msg-conversation-listitem--unread, li.msg-conversation-listitem"; 
     
-    console.log(`🔍 Scanning for unread messages...`);
-    
+    console.log(`🔍 Scanning for unread messages using selector: ${unreadConvoSelector}`);
     const unreadThreads = page.locator(unreadConvoSelector);
     const count = await unreadThreads.count();
 
     if (count > 0) {
-      console.log(`📬 Found ${count} unread conversation threads.`);
+      console.log(`📬 Found ${count} conversation threads (processing 1 for testing).`);
       
-      // Process the first unread thread
+      // Process only the first thread for testing
       const firstThread = unreadThreads.first();
       await firstThread.click();
-      await page.waitForTimeout(2000); // Wait for thread messages panel to load
+      await page.waitForTimeout(3000); // Wait for thread messages panel to load
 
       // Read the last message bubble text
-      const messageBubbles = page.locator("div[role='row'] span, div[data-testid='message-text-container']"); // Generic msg classes
+      let messageBubbles = null;
+      if (platform === "linkedin") messageBubbles = page.locator("p.msg-s-event-listitem__body");
+      else if (platform === "tiktok") messageBubbles = page.locator("div[data-e2e='message-text']");
+      else messageBubbles = page.locator("div[role='row'] span, div[data-testid='message-text-container']"); // FB/IG
+
       const totalBubbles = await messageBubbles.count();
 
       if (totalBubbles > 0) {
@@ -81,8 +88,12 @@ export async function scanInboxOnce(
         }
 
         if (replyToUse) {
-          const msgInput = page.locator("textarea[placeholder*='Message...'], [role='textbox']").first();
-          if (await msgInput.isVisible()) {
+          let msgInput = null;
+          if (platform === "linkedin") msgInput = page.locator("div.msg-form__contenteditable[contenteditable='true']").first();
+          else if (platform === "tiktok") msgInput = page.locator("div[data-e2e='message-input'] div[contenteditable='true']").first();
+          else msgInput = page.locator("textarea[placeholder*='Message...'], [role='textbox']").first();
+
+          if (msgInput && await msgInput.isVisible()) {
             await msgInput.focus();
             await page.keyboard.insertText(replyToUse);
             await page.waitForTimeout(500);
@@ -92,6 +103,8 @@ export async function scanInboxOnce(
             console.log("✅ Message sent successfully!");
             repliesSent++;
             await page.waitForTimeout(2000);
+          } else {
+             console.log("⚠️ Could not find message input box.");
           }
         } else {
           console.log(`💬 No rule matched, skipping reply.`);

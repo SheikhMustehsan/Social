@@ -14,5 +14,14 @@ export async function setupCronJobs() {
     repeat: { pattern: "0 3 * * *" }
   });
 
+  // Every hour for Auto-Moderation
+  await browserQueue.add("scan_dms_cron", { type: "scan_dms_all" }, {
+    repeat: { pattern: "0 * * * *" }
+  });
+  
+  await browserQueue.add("crawl_comments_cron", { type: "crawl_comments_all" }, {
+    repeat: { pattern: "0 * * * *" }
+  });
+
   console.log("✅ Cron jobs scheduled.");
 }

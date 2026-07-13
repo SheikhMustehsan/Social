@@ -37,11 +37,15 @@ export default function Moderation({ token, companyId }: ModerationProps) {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [syncJobs, setSyncJobs] = useState<SyncJob[]>([]);
   
-  // Form state
+  // Form state for Rules
   const [selectedProfileId, setSelectedProfileId] = useState<string>("");
-  const [type, setType] = useState<string>("comment");
+  const [ruleType, setRuleType] = useState<string>("comment");
   const [triggerKeyword, setTriggerKeyword] = useState<string>("");
   const [replyText, setReplyText] = useState<string>("");
+
+  // Form state for Tracked URLs
+  const [trackedProfileId, setTrackedProfileId] = useState<string>("");
+  const [trackedUrl, setTrackedUrl] = useState<string>("");
 
   useEffect(() => {
     if (token && companyId) {
@@ -112,7 +116,7 @@ export default function Moderation({ token, companyId }: ModerationProps) {
         body: JSON.stringify({
           socialProfileId: selectedProfileId || null,
           platform: selectedProfileId ? profiles.find(p => p.id === selectedProfileId)?.platform : null,
-          type,
+          type: ruleType,
           triggerKeyword,
           replyText
         }),
@@ -120,6 +124,36 @@ export default function Moderation({ token, companyId }: ModerationProps) {
       if (res.ok) {
         setTriggerKeyword("");
         setReplyText("");
+        fetchRules();
+      } else {
+        const data = await res.json();
+        alert("Error: " + data.error);
+      }
+    } catch (e) {
+      alert("Network error");
+    }
+  };
+
+  const handleAddTrackedUrl = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`${API_BASE}/api/moderation/rules`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+          "x-company-id": companyId,
+        },
+        body: JSON.stringify({
+          socialProfileId: trackedProfileId,
+          platform: profiles.find(p => p.id === trackedProfileId)?.platform,
+          type: "tracked_post",
+          triggerKeyword: trackedUrl,
+          replyText: ""
+        }),
+      });
+      if (res.ok) {
+        setTrackedUrl("");
         fetchRules();
       } else {
         const data = await res.json();
@@ -172,7 +206,7 @@ export default function Moderation({ token, companyId }: ModerationProps) {
     <div className="tab-panel animate-fade-in">
       <div className="glass-panel" style={{ marginBottom: "20px" }}>
         <h3>💬 Auto-Moderation Engine</h3>
-        <p>Trigger background processes to scan and auto-reply to DMs and comments using your configured rules below.</p>
+        <p>Trigger background processes to scan and auto-reply to DMs and comments using your configured rules below. Currently limited to 1 post/message for testing.</p>
         <div style={{ display: 'flex', gap: '10px', marginTop: '15px' }}>
           <button className="glass-button" onClick={() => triggerSync("sync-dms")}>
             Sync & Auto-Reply DMs
@@ -183,10 +217,10 @@ export default function Moderation({ token, companyId }: ModerationProps) {
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "20px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
         <div className="glass-panel">
-          <h3>Add New Rule</h3>
-          <form onSubmit={handleCreateRule}>
+          <h3>Create Auto-Reply Rule</h3>
+          <form onSubmit={handleCreateRule} style={{ marginTop: "15px" }}>
             <div className="form-group" style={{ marginBottom: "10px" }}>
               <label className="glass-label">Social Profile</label>
               <select className="glass-input" value={selectedProfileId} onChange={e => setSelectedProfileId(e.target.value)}>
@@ -198,7 +232,7 @@ export default function Moderation({ token, companyId }: ModerationProps) {
             </div>
             <div className="form-group" style={{ marginBottom: "10px" }}>
               <label className="glass-label">Message Type</label>
-              <select className="glass-input" value={type} onChange={e => setType(e.target.value)}>
+              <select className="glass-input" value={ruleType} onChange={e => setRuleType(e.target.value)}>
                 <option value="comment">Comment</option>
                 <option value="dm">Direct Message</option>
               </select>
@@ -226,13 +260,64 @@ export default function Moderation({ token, companyId }: ModerationProps) {
                 rows={3}
               />
             </div>
-            <button type="submit" className="glass-button primary" style={{ width: "100%" }}>Save Rule</button>
+            <button type="submit" className="glass-button primary" style={{ width: "100%", marginTop: "15px" }}>Add Rule</button>
           </form>
         </div>
 
         <div className="glass-panel">
-          <h3>Active Rules</h3>
-          {rules.length === 0 ? (
+          <h3>Track Specific Posts</h3>
+          <p style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.7)", marginBottom: "15px" }}>
+            Paste the URL of a specific ad or ranking post. The bot will prioritize scanning these posts for comments before checking your main profile grid.
+          </p>
+          <form onSubmit={handleAddTrackedUrl}>
+            <div className="form-group" style={{ marginBottom: "10px" }}>
+              <label className="glass-label">Select Profile</label>
+              <select className="glass-input" value={trackedProfileId} onChange={(e) => setTrackedProfileId(e.target.value)} required>
+                <option value="">-- Choose Profile --</option>
+                {profiles.map(p => (
+                  <option key={p.id} value={p.id}>{p.profileName} ({p.platform})</option>
+                ))}
+              </select>
+            </div>
+            <div className="form-group" style={{ marginBottom: "10px" }}>
+              <label className="glass-label">Post URL</label>
+              <input 
+                type="url" 
+                className="glass-input" 
+                placeholder="https://www.instagram.com/p/..." 
+                value={trackedUrl} 
+                onChange={(e) => setTrackedUrl(e.target.value)} 
+                required 
+              />
+            </div>
+            <button type="submit" className="glass-button primary" style={{ width: "100%", marginTop: "15px" }}>Track Post</button>
+          </form>
+
+          <h4 style={{ marginTop: "20px", marginBottom: "10px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "5px" }}>Currently Tracked URLs</h4>
+          {rules.filter(r => r.type === "tracked_post").length === 0 ? (
+            <p style={{ fontSize: "0.9rem", color: "rgba(255,255,255,0.5)" }}>No posts tracked.</p>
+          ) : (
+            <div style={{ maxHeight: "150px", overflowY: "auto" }}>
+              {rules.filter(r => r.type === "tracked_post").map(rule => (
+                <div key={rule.id} className="rule-card" style={{ padding: "8px", background: "rgba(0,0,0,0.2)", borderRadius: "8px", marginBottom: "5px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ overflow: "hidden" }}>
+                    <div style={{ fontSize: "0.8rem", color: "rgba(255,255,255,0.5)" }}>{rule.profileName}</div>
+                    <div style={{ fontSize: "0.85rem", whiteSpace: "nowrap", textOverflow: "ellipsis", overflow: "hidden" }}>{rule.triggerKeyword}</div>
+                  </div>
+                  <button className="glass-button" style={{ padding: "4px 8px", background: "rgba(255,82,82,0.2)", color: "#ff5252", minWidth: "auto", border: "none" }} onClick={() => handleDeleteRule(rule.id)}>
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="glass-panel" style={{ marginTop: "20px" }}>
+        <h3>Active Auto-Reply Rules</h3>
+        <div style={{ marginTop: "15px" }}>
+          {rules.filter(r => r.type !== "tracked_post").length === 0 ? (
             <p>No moderation rules configured yet.</p>
           ) : (
             <div className="table-responsive">
@@ -247,7 +332,7 @@ export default function Moderation({ token, companyId }: ModerationProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {rules.map(rule => (
+                  {rules.filter(r => r.type !== "tracked_post").map(rule => (
                     <tr key={rule.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                       <td style={{ padding: "10px" }}>{rule.profileName || "Global"}</td>
                       <td style={{ padding: "10px", textTransform: "capitalize" }}>{rule.type}</td>

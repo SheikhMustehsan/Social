@@ -181,7 +181,7 @@ export const browserWorker = new Worker(
       }
     } 
     // Handle global cron triggers
-    else if (type === "scrape_ads_all" || type === "scrape_organic_all") {
+    else if (type === "scrape_ads_all" || type === "scrape_organic_all" || type === "scan_dms_all" || type === "crawl_comments_all") {
       const allProfiles = await db.select().from(socialProfiles).where(eq(socialProfiles.status, "connected"));
       
       for (const profile of allProfiles) {
@@ -202,6 +202,14 @@ export const browserWorker = new Worker(
             }
           } else if (type === "scrape_organic_all") {
             await scrapeOrganicMetrics(profile.companyId, profile.platform as any);
+          } else if (type === "scan_dms_all") {
+            await scanInboxOnce(profile.chromeProfilePath, profile.platform as any, profile.id);
+          } else if (type === "crawl_comments_all") {
+            let profileUrl = profile.platform === 'facebook' ? `https://facebook.com/${profile.profileId}` : 
+                             profile.platform === 'tiktok' ? `https://tiktok.com/@${profile.profileId}` :
+                             profile.platform === 'linkedin' ? `https://linkedin.com/company/${profile.profileId}` :
+                             `https://instagram.com/${profile.profileId}`;
+            await crawlAndReplyComments(profile.chromeProfilePath, profileUrl, profile.id, profile.companyId, profile.platform);
           }
           
           await db.update(syncJobs).set({ status: "success", completedAt: new Date() }).where(eq(syncJobs.id, jobLog.id));
