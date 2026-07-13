@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { db } from "../../db/db.js";
 import { moderationRules } from "../../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, isNull } from "drizzle-orm";
 
 interface Comment {
   id: string;
@@ -29,7 +29,10 @@ export async function crawlAndReplyComments(
       .where(
         and(
           eq(moderationRules.companyId, companyId),
-          eq(moderationRules.socialProfileId, socialProfileId)
+          or(
+            eq(moderationRules.socialProfileId, socialProfileId),
+            isNull(moderationRules.socialProfileId)
+          )
         )
       );
   } catch (e) {

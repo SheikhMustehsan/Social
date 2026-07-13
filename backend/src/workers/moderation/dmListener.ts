@@ -4,7 +4,7 @@ import path from "path";
 import fs from "fs";
 import { db } from "../../db/db.js";
 import { moderationRules } from "../../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, isNull } from "drizzle-orm";
 
 export async function scanInboxOnce(
   profilePath: string,
@@ -19,7 +19,10 @@ export async function scanInboxOnce(
       .from(moderationRules)
       .where(
         and(
-          eq(moderationRules.socialProfileId, socialProfileId),
+          or(
+            eq(moderationRules.socialProfileId, socialProfileId),
+            isNull(moderationRules.socialProfileId)
+          ),
           eq(moderationRules.type, "dm")
         )
       );
