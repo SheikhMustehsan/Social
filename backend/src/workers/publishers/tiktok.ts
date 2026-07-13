@@ -76,7 +76,7 @@ export async function publishToTikTok(
     console.log("🚀 Publishing to TikTok...");
     const postBtn = page.locator("button:has-text('Post')").first();
     await postBtn.waitFor({ state: "visible", timeout: 5000 });
-    await postBtn.click();
+    await postBtn.click({ force: true });
 
     // Wait for upload success modal or redirect
     await page.waitForTimeout(15000);

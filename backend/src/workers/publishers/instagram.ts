@@ -61,14 +61,14 @@ export async function publishToInstagram(
     console.log("➡️ Navigating Crop modal...");
     let nextBtn = dialog.locator('div[role="button"]:has-text("Next"), button:has-text("Next")').first();
     await nextBtn.waitFor({ state: "visible", timeout: 5000 });
-    await nextBtn.click();
+    await nextBtn.click({ force: true });
     await page.waitForTimeout(2000);
 
     console.log("➡️ Navigating Filters modal...");
     // Note: Playwright needs to click the newly rendered Next button
     nextBtn = dialog.locator('div[role="button"]:has-text("Next"), button:has-text("Next")').first();
     await nextBtn.waitFor({ state: "visible", timeout: 5000 });
-    await nextBtn.click();
+    await nextBtn.click({ force: true });
     await page.waitForTimeout(2000);
 
     // 4. Type Caption
@@ -86,7 +86,7 @@ export async function publishToInstagram(
     console.log("🚀 Clicking Share button...");
     const shareBtn = dialog.locator('div[role="button"]:has-text("Share"), button:has-text("Share")').first();
     await shareBtn.waitFor({ state: "visible", timeout: 5000 });
-    await shareBtn.click();
+    await shareBtn.click({ force: true });
 
     // 6. Wait for success confirmation
     console.log("⏳ Waiting for upload to complete...");

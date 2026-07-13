@@ -268,7 +268,7 @@ export async function publishToFacebookSuite(
     console.log("🚀 Publishing to Meta Page...");
     const publishBtn = page.locator("div[role='button'], button").filter({ hasText: /^(Publish|Schedule|Post)$/i }).first();
     await publishBtn.waitFor({ state: "visible", timeout: 10000 });
-    await publishBtn.click();
+    await publishBtn.click({ force: true });
 
     // Wait for the server upload confirmation/routing change
     await page.waitForTimeout(12000);

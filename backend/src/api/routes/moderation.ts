@@ -92,7 +92,7 @@ export async function moderationRoutes(fastify: FastifyInstance) {
         .where(
           and(
             eq(syncJobs.companyId, companyId),
-            inArray(syncJobs.jobType, ["scan_dms", "crawl_comments"])
+            inArray(syncJobs.jobType, ["scan_dms", "crawl_comments", "scan_dms_all", "crawl_comments_all"])
           )
         )
         .orderBy(desc(syncJobs.startedAt))
