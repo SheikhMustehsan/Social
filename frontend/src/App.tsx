@@ -3,6 +3,7 @@ import Auth from "./pages/Auth.js";
 import ConnectedProfiles from "./components/ConnectedProfiles.js";
 import Scheduler from "./components/Scheduler.js";
 import TeamMembers from "./components/TeamMembers.js";
+import SystemAdmin from "./components/SystemAdmin.js";
 import AdsDashboard from "./components/AdsDashboard.js";
 import OrganicDashboard from "./components/OrganicDashboard.js";
 import Moderation from "./components/Moderation.js";
@@ -221,12 +222,23 @@ export default function App() {
           >
             🔗 Connected Profiles
           </button>
+          
           <button
             className={`nav-item ${activeTab === "team" ? "active" : ""}`}
             onClick={() => setActiveTab("team")}
           >
             👥 Team Members
           </button>
+          
+          {user?.globalRole === "super_admin" && (
+            <button
+              className={`nav-item ${activeTab === "system_admin" ? "active" : ""}`}
+              onClick={() => setActiveTab("system_admin")}
+              style={{ marginTop: "20px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "20px" }}
+            >
+              ⚙️ System Admin
+            </button>
+          )}
         </nav>
 
         {/* User Profile / Logout */}
@@ -263,6 +275,10 @@ export default function App() {
 
           {activeTab === "moderation" && (
             <Moderation token={token} companyId={activeCompanyId || ""} />
+          )}
+
+          {activeTab === "system_admin" && user?.globalRole === "super_admin" && (
+            <SystemAdmin token={token} />
           )}
 
           {activeTab === "ads" && (

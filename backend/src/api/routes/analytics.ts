@@ -1,8 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { db } from "../../db/db.js";
-import { adsAnalytics, socialAnalytics, socialProfiles } from "../../db/schema.js";
+import { adsAnalytics, socialAnalytics, socialProfiles, syncJobs } from "../../db/schema.js";
 import { authenticate, authorizeCompanyAccess } from "../middleware/auth.js";
-import { eq, and, sql, isNotNull, gte, lt } from "drizzle-orm";
+import { eq, and, sql, isNotNull, gte, lt, desc, inArray } from "drizzle-orm";
 import { browserQueue } from "../../queue/queue.js";
 
 export async function analyticsRoutes(fastify: FastifyInstance) {
@@ -167,6 +167,30 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({ error: "Failed to trigger ads sync" });
+    }
+  });
+
+  // 5. GET RECENT SYNC JOBS
+  fastify.get("/sync-jobs", { preHandler: [authorizeCompanyAccess] }, async (request, reply) => {
+    const companyId = request.headers["x-company-id"] as string;
+
+    try {
+      const jobs = await db
+        .select()
+        .from(syncJobs)
+        .where(
+          and(
+            eq(syncJobs.companyId, companyId),
+            inArray(syncJobs.jobType, ["scrape_ads_all", "scrape_organic_all"])
+          )
+        )
+        .orderBy(desc(syncJobs.startedAt))
+        .limit(10);
+
+      return reply.send(jobs);
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Failed to fetch analytics sync jobs" });
     }
   });
 }

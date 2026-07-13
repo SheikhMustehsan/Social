@@ -88,3 +88,12 @@ export async function authorizeCompanyAdmin(request: FastifyRequest, reply: Fast
     return reply.status(403).send({ error: "Forbidden: Admin privileges are required for this action." });
   }
 }
+
+// 4. Global Super Admin Authorization Check
+// Verifies if the user has the global 'super_admin' role.
+export async function authorizeSuperAdmin(request: FastifyRequest, reply: FastifyReply) {
+  const user = request.user;
+  if (!user || user.globalRole !== "super_admin") {
+    return reply.status(403).send({ error: "Forbidden: Super Admin privileges are required for this action." });
+  }
+}

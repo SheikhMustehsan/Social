@@ -4,9 +4,11 @@ import { db } from "../../db/db.js";
 import { users } from "../../db/schema.js";
 import { eq } from "drizzle-orm";
 
+import { authenticate, authorizeSuperAdmin } from "../middleware/auth.js";
+
 export async function authRoutes(fastify: FastifyInstance) {
-  // 1. REGISTER ENDPOINT
-  fastify.post("/register", async (request, reply) => {
+  // 1. REGISTER ENDPOINT (Restricted to super_admin)
+  fastify.post("/register", { preHandler: [authenticate, authorizeSuperAdmin] }, async (request, reply) => {
     const { email, password } = request.body as any;
 
     if (!email || !password) {
@@ -37,15 +39,9 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       const user = newUsers[0];
 
-      // Sign JWT
-      const token = fastify.jwt.sign({
-        id: user.id,
-        email: user.email,
-        globalRole: user.globalRole,
-      });
-
+      // We don't need to return a token since the admin is creating a user, not logging in as them.
       return reply.status(201).send({
-        token,
+        message: "User created successfully",
         user: {
           id: user.id,
           email: user.email,
@@ -99,6 +95,24 @@ export async function authRoutes(fastify: FastifyInstance) {
     } catch (error) {
       fastify.log.error(error);
       return reply.status(500).send({ error: "Internal server error during login" });
+    }
+  });
+
+  // 3. GET ALL USERS (Admin Only)
+  fastify.get("/users", { preHandler: [authenticate, authorizeSuperAdmin] }, async (request, reply) => {
+    try {
+      const allUsers = await db
+        .select({
+          id: users.id,
+          email: users.email,
+          globalRole: users.globalRole,
+          createdAt: users.createdAt,
+        })
+        .from(users);
+      return reply.send(allUsers);
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Failed to fetch users" });
     }
   });
 }

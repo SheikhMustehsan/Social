@@ -7,7 +7,6 @@ interface AuthProps {
 }
 
 export default function Auth({ onLoginSuccess }: AuthProps) {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,9 +17,8 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
     setError("");
     setLoading(true);
 
-    const endpoint = isLogin ? "/api/auth/login" : "/api/auth/register";
     try {
-      const response = await fetch(`${API_BASE}${endpoint}`, {
+      const response = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -45,25 +43,10 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
     <div className="auth-container">
       <div className="auth-background-glow"></div>
       
-      <div className="glass-panel auth-card animate-fade-in">
-        <div className="auth-logo">
-          <h2>BuzzinTech</h2>
-          <p>Social Automation Suite</p>
-        </div>
-
-        <div className="auth-tabs">
-          <button
-            className={`auth-tab ${isLogin ? "active" : ""}`}
-            onClick={() => { setIsLogin(true); setError(""); }}
-          >
-            Login
-          </button>
-          <button
-            className={`auth-tab ${!isLogin ? "active" : ""}`}
-            onClick={() => { setIsLogin(false); setError(""); }}
-          >
-            Sign Up
-          </button>
+      <div className="auth-card glass-panel">
+        <div className="auth-header">
+          <h2>Welcome Back</h2>
+          <p>Login to access your Social Automation dashboard</p>
         </div>
 
         {error && <div className="auth-error-message">{error}</div>}
@@ -95,16 +78,10 @@ export default function Auth({ onLoginSuccess }: AuthProps) {
             />
           </div>
 
-          <button type="submit" className="glass-button primary auth-submit-btn" disabled={loading}>
-            {loading ? "Processing..." : isLogin ? "Sign In" : "Create Account"}
+          <button type="submit" className="glass-button primary" disabled={loading}>
+            {loading ? "Logging in..." : "Login"}
           </button>
         </form>
-
-        {!isLogin && (
-          <p className="auth-disclaimer">
-            Note: The first registered account automatically becomes the <strong>Super Admin</strong>.
-          </p>
-        )}
       </div>
     </div>
   );
