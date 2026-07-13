@@ -186,6 +186,7 @@ export async function publishToFacebookSuite(
       const fileChooserPromise = page.waitForEvent("filechooser", { timeout: 5000 }).catch(() => null);
       
       console.log("Clicking Add Media button...");
+      // @ts-ignore
       await addMediaBtn.evaluate(el => (el as HTMLElement).click());
       
       let fileChooser = await fileChooserPromise;

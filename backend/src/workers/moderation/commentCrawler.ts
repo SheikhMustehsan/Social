@@ -46,7 +46,7 @@ export async function crawlAndReplyComments(
     await page.goto(profileUrl, { waitUntil: "domcontentloaded", timeout: 45000 });
     await page.waitForTimeout(5000);
     
-    // Scroll a bit to trigger lazy loading of posts and comments
+    // @ts-ignore
     await page.evaluate(() => window.scrollBy(0, 1500));
     await page.waitForTimeout(4000);
     // Instagram/Facebook post comment parsing

@@ -165,6 +165,7 @@ export async function launchBrowserWithStorageState(
     });
 
     // Mock chrome object (present in headed Chrome but absent in headless/Playwright)
+    // @ts-ignore
     (window as any).chrome = {
       app: {
         isInstalled: false,

@@ -9,8 +9,10 @@ export interface UserPayload {
   globalRole: string; // 'super_admin' | 'member'
 }
 
-declare module "fastify" {
-  interface FastifyRequest {
+import "@fastify/jwt";
+
+declare module "@fastify/jwt" {
+  interface FastifyJWT {
     user: UserPayload;
   }
 }

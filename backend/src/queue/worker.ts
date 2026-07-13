@@ -163,14 +163,14 @@ export const browserWorker = new Worker(
           // If no specific postUrl provided, crawl the profile page
           url = profile.platform === 'facebook' ? `https://facebook.com/${profile.profileId}` : `https://instagram.com/${profile.profileId}`;
         }
-        await crawlAndReplyComments(profile.chromeProfilePath, url, profile.id, profile.companyId, profile.platform);
+        await crawlAndReplyComments(profile.chromeProfilePath, url, profile.id, (profile as any).companyId, profile.platform);
       } else if (type === "scan_dms") {
         await scanInboxOnce(profile.chromeProfilePath, profile.platform as any, profile.id);
       }
     }
   },
   {
-    connection,
+    connection: connection as any,
     concurrency: 1, // Run one browser posting task at a time to avoid RAM exhaustion on server
   }
 );
