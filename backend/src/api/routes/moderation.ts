@@ -40,7 +40,7 @@ export async function moderationRoutes(fastify: FastifyInstance) {
     const companyId = request.headers["x-company-id"] as string;
     const { socialProfileId, platform, type, triggerKeyword, replyText } = request.body as any;
 
-    if (!type || !triggerKeyword || !replyText) {
+    if (!type || !triggerKeyword || replyText === undefined) {
       return reply.status(400).send({ error: "Missing required fields" });
     }
 
