@@ -167,7 +167,14 @@ export const browserWorker = new Worker(
           if (type === "crawl_comments") {
             let url = postUrl;
             if (!url) {
-              url = profile.platform === 'facebook' ? `https://facebook.com/${profile.profileId}` : `https://instagram.com/${profile.profileId}`;
+              if (profile.profileId && profile.profileId.startsWith('http')) {
+                url = profile.profileId;
+              } else {
+                url = profile.platform === 'facebook' ? `https://facebook.com/${profile.profileId}` : 
+                      profile.platform === 'tiktok' ? `https://tiktok.com/@${profile.profileId}` :
+                      profile.platform === 'linkedin' ? `https://linkedin.com/company/${profile.profileId}` :
+                      `https://instagram.com/${profile.profileId}`;
+              }
             }
             await crawlAndReplyComments(profile.chromeProfilePath, url, profile.id, profile.companyId, profile.platform);
           } else if (type === "scan_dms") {
@@ -205,10 +212,15 @@ export const browserWorker = new Worker(
           } else if (type === "scan_dms_all") {
             await scanInboxOnce(profile.chromeProfilePath, profile.platform as any, profile.id);
           } else if (type === "crawl_comments_all") {
-            let profileUrl = profile.platform === 'facebook' ? `https://facebook.com/${profile.profileId}` : 
-                             profile.platform === 'tiktok' ? `https://tiktok.com/@${profile.profileId}` :
-                             profile.platform === 'linkedin' ? `https://linkedin.com/company/${profile.profileId}` :
-                             `https://instagram.com/${profile.profileId}`;
+            let profileUrl = "";
+            if (profile.profileId && profile.profileId.startsWith('http')) {
+              profileUrl = profile.profileId;
+            } else {
+              profileUrl = profile.platform === 'facebook' ? `https://facebook.com/${profile.profileId}` : 
+                           profile.platform === 'tiktok' ? `https://tiktok.com/@${profile.profileId}` :
+                           profile.platform === 'linkedin' ? `https://linkedin.com/company/${profile.profileId}` :
+                           `https://instagram.com/${profile.profileId}`;
+            }
             await crawlAndReplyComments(profile.chromeProfilePath, profileUrl, profile.id, profile.companyId, profile.platform);
           }
           
