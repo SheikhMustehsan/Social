@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import Auth from "./pages/Auth.js";
 import ConnectedProfiles from "./components/ConnectedProfiles.js";
 import Scheduler from "./components/Scheduler.js";
+import TeamMembers from "./components/TeamMembers.js";
 import Moderation from "./components/Moderation.js";
 import "./App.css";
 import { API_BASE } from "./config";
@@ -355,10 +356,7 @@ export default function App() {
           )}
 
           {activeTab === "team" && (
-            <div className="tab-panel glass-panel animate-fade-in placeholder-panel">
-              <h3>👥 Team Members & Roles Slot</h3>
-              <p>Will list members, roles, and support inviting colleagues to this workspace.</p>
-            </div>
+            <TeamMembers token={token} companyId={activeCompanyId || ""} isAdmin={isUserAdmin()} />
           )}
         </div>
       </main>
