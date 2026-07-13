@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_BASE } from "../config";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
 interface OrganicSummary {
   totalFollowers: number;
@@ -8,6 +9,14 @@ interface OrganicSummary {
   totalEngagement: number;
   engagementRate: number;
   pop: { followers: string; engagement: string; reach: string; };
+}
+
+interface TimeseriesData {
+  date: string;
+  totalFollowers: number;
+  totalPosts: number;
+  totalReach: number;
+  totalEngagement: number;
 }
 
 interface SyncJob {
@@ -26,6 +35,7 @@ interface OrganicDashboardProps {
 
 export default function OrganicDashboard({ token, companyId }: OrganicDashboardProps) {
   const [summary, setSummary] = useState<OrganicSummary | null>(null);
+  const [timeseries, setTimeseries] = useState<TimeseriesData[]>([]);
   const [syncJobs, setSyncJobs] = useState<SyncJob[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -38,13 +48,15 @@ export default function OrganicDashboard({ token, companyId }: OrganicDashboardP
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
-      const [sumRes, jobsRes] = await Promise.all([
+      const [sumRes, jobsRes, timeRes] = await Promise.all([
         fetch(`${API_BASE}/api/analytics/organic/summary`, { headers: { Authorization: `Bearer ${token}`, "x-company-id": companyId } }),
-        fetch(`${API_BASE}/api/analytics/sync-jobs`, { headers: { Authorization: `Bearer ${token}`, "x-company-id": companyId } })
+        fetch(`${API_BASE}/api/analytics/sync-jobs`, { headers: { Authorization: `Bearer ${token}`, "x-company-id": companyId } }),
+        fetch(`${API_BASE}/api/analytics/organic/timeseries`, { headers: { Authorization: `Bearer ${token}`, "x-company-id": companyId } })
       ]);
       
       if (sumRes.ok) setSummary(await sumRes.json());
       if (jobsRes.ok) setSyncJobs(await jobsRes.json());
+      if (timeRes.ok) setTimeseries(await timeRes.json());
     } catch (err) {
       console.error(err);
     } finally {
@@ -84,8 +96,40 @@ export default function OrganicDashboard({ token, companyId }: OrganicDashboardP
         <p>No organic summary data available.</p>
       )}
 
-      <div className="glass-panel chart-container-placeholder" style={{ minHeight: "150px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-        <p>Detailed performance graphs will appear here once D3/Chart.js integration is complete.</p>
+      <div className="glass-panel" style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h3>Growth Over Time</h3>
+          <button 
+            className="action-btn primary" 
+            onClick={() => window.open(`${API_BASE}/api/analytics/organic/csv?companyId=${companyId}&token=${token}`, "_blank")}
+            style={{ fontSize: "0.8rem", padding: "5px 15px" }}
+          >
+            📥 Download CSV
+          </button>
+        </div>
+        
+        {timeseries.length > 0 ? (
+          <div style={{ width: "100%", height: 300 }}>
+            <ResponsiveContainer>
+              <LineChart data={timeseries} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                <XAxis dataKey="date" stroke="rgba(255,255,255,0.5)" tick={{fill: 'rgba(255,255,255,0.5)'}} />
+                <YAxis yAxisId="left" stroke="rgba(255,255,255,0.5)" tick={{fill: 'rgba(255,255,255,0.5)'}} />
+                <YAxis yAxisId="right" orientation="right" stroke="rgba(255,255,255,0.5)" tick={{fill: 'rgba(255,255,255,0.5)'}} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: "#1e1e2d", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px" }} 
+                  itemStyle={{ color: "#fff" }}
+                />
+                <Line yAxisId="left" type="monotone" dataKey="totalFollowers" name="Followers" stroke="#6C5CE7" strokeWidth={3} activeDot={{ r: 8 }} />
+                <Line yAxisId="right" type="monotone" dataKey="totalPosts" name="Total Posts" stroke="#00CEC9" strokeWidth={3} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div style={{ minHeight: "150px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <p>No timeline data available. Try running a sync job.</p>
+          </div>
+        )}
       </div>
 
       <div className="glass-panel" style={{ marginTop: "20px" }}>
