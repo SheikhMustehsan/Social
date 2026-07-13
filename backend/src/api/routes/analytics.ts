@@ -211,25 +211,62 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
 
       for (const profile of profilesToScrape) {
         const jobId = `scrape_ads_${profile.id}_${Date.now()}`;
-        const job = await browserQueue.add(
-          jobId,
-          {
-            type: "scrape_ads",
-            profileId: profile.id,
-            dateRange
-          },
-          {
-            jobId,
-            attempts: 1,
-          }
-        );
-        queuedJobs.push({ profileId: profile.id, platform: profile.platform, jobId: job.id });
+        await db.insert(syncJobs).values({
+          id: jobId,
+          companyId,
+          jobType: "scrape_ads",
+          status: "pending",
+          startedAt: new Date(),
+        });
+        await browserQueue.add("scrape_ads", {
+          socialProfileId: profile.id,
+          companyId,
+          dateRange,
+          syncJobId: jobId,
+        });
+        queuedJobs.push(jobId);
       }
 
-      return reply.send({ message: "Ads sync triggered successfully", queuedJobs });
+      return reply.send({ status: "success", message: `Queued ${queuedJobs.length} ad scrape jobs.`, jobs: queuedJobs });
     } catch (error) {
       fastify.log.error(error);
-      return reply.status(500).send({ error: "Failed to trigger ads sync" });
+      return reply.status(500).send({ error: "Failed to trigger ad sync" });
+    }
+  });
+
+  // 5. TRIGGER ORGANIC SYNC
+  fastify.post("/organic/sync", { preHandler: [authorizeCompanyAccess] }, async (request, reply) => {
+    const companyId = request.headers["x-company-id"] as string;
+
+    try {
+      const connectedProfiles = await db
+        .select()
+        .from(socialProfiles)
+        .where(
+          and(
+            eq(socialProfiles.companyId, companyId),
+            eq(socialProfiles.status, "connected")
+          )
+        );
+
+      if (connectedProfiles.length === 0) {
+        return reply.status(400).send({ error: "No connected social profiles found to sync." });
+      }
+
+      const jobId = `scrape_organic_all_${Date.now()}`;
+      await db.insert(syncJobs).values({
+        id: jobId,
+        companyId,
+        jobType: "scrape_organic_all",
+        status: "pending",
+        startedAt: new Date(),
+      });
+      await browserQueue.add("scrape_organic_all", { syncJobId: jobId });
+
+      return reply.send({ status: "success", message: "Organic sync job queued.", jobId });
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Failed to trigger organic sync" });
     }
   });
 
