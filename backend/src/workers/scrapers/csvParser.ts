@@ -43,6 +43,14 @@ export async function parseAndSaveAdsCSV(
     h.toLowerCase().includes("results") || h.toLowerCase() === "conversions" || h.toLowerCase() === "leads"
   );
 
+  let detectedCurrency = "USD";
+  if (spendIdx !== -1) {
+    const match = headers[spendIdx].match(/\(([A-Z]{3})\)/i);
+    if (match) {
+      detectedCurrency = match[1].toUpperCase();
+    }
+  }
+
   // Validate that we found at least the Campaign and Spend columns
   if (campaignIdx === -1 || spendIdx === -1) {
     throw new Error("CSV schema mismatch: Could not find required 'Campaign' or 'Spend/Amount Spent' columns.");
@@ -68,7 +76,7 @@ export async function parseAndSaveAdsCSV(
     const clicksVal = parseInt(columns[clicksIdx]?.replace(/[^0-9]/g, ""), 10) || 0;
     const conversionsVal = parseInt(columns[conversionsIdx]?.replace(/[^0-9]/g, ""), 10) || 0;
 
-    console.log(`📊 Saving Campaign: ${campaignName} | Spend: $${spendVal} | Impressions: ${impressionsVal} | Clicks: ${clicksVal}`);
+    console.log(`📊 Saving Campaign: ${campaignName} | Spend: ${spendVal} ${detectedCurrency} | Impressions: ${impressionsVal} | Clicks: ${clicksVal}`);
 
     // 3. Write row record to database
     await db.insert(adsAnalytics).values({
@@ -79,7 +87,8 @@ export async function parseAndSaveAdsCSV(
       spend: spendVal,
       impressions: impressionsVal,
       clicks: clicksVal,
-      conversions: conversionsVal
+      conversions: conversionsVal,
+      currency: detectedCurrency
     });
     
     rowsInserted++;

@@ -3,6 +3,8 @@ import Auth from "./pages/Auth.js";
 import ConnectedProfiles from "./components/ConnectedProfiles.js";
 import Scheduler from "./components/Scheduler.js";
 import TeamMembers from "./components/TeamMembers.js";
+import AdsDashboard from "./components/AdsDashboard.js";
+import OrganicDashboard from "./components/OrganicDashboard.js";
 import Moderation from "./components/Moderation.js";
 import "./App.css";
 import { API_BASE } from "./config";
@@ -33,15 +35,6 @@ export default function App() {
   const [newCompanyName, setNewCompanyName] = useState("");
   const [showCreateCompanyModal, setShowCreateCompanyModal] = useState(false);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
-
-  const [summary, setSummary] = useState({
-    totalSpend: 0,
-    totalImpressions: 0,
-    totalClicks: 0,
-    totalConversions: 0,
-    ctr: 0,
-    cpc: 0
-  });
 
   // Initialize user from local storage
   useEffect(() => {
@@ -115,30 +108,6 @@ export default function App() {
     const activeCompany = companies.find(c => c.id === activeCompanyId);
     return activeCompany?.role === "admin";
   };
-
-  const fetchSummary = async () => {
-    if (!activeCompanyId || !token) return;
-    try {
-      const response = await fetch(`${API_BASE}/api/analytics/summary`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "x-company-id": activeCompanyId,
-        },
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setSummary(data);
-      }
-    } catch (err) {
-      console.error("Error fetching summary:", err);
-    }
-  };
-
-  useEffect(() => {
-    if (activeCompanyId && token) {
-      fetchSummary();
-    }
-  }, [activeCompanyId, activeTab, token]);
 
   const selectCompany = (id: string) => {
     localStorage.setItem("activeCompanyId", id);
@@ -222,11 +191,17 @@ export default function App() {
 
         {/* Navigation Menu */}
         <nav className="sidebar-nav">
-          <button
-            className={`nav-item ${activeTab === "dashboard" ? "active" : ""}`}
+          <button 
+            className={activeTab === "dashboard" ? "active" : ""} 
             onClick={() => setActiveTab("dashboard")}
           >
-            📊 Analytics Dashboard
+            🌱 Organic Dashboard
+          </button>
+          <button 
+            className={activeTab === "ads" ? "active" : ""} 
+            onClick={() => setActiveTab("ads")}
+          >
+            📈 Ads Dashboard
           </button>
           <button
             className={`nav-item ${activeTab === "scheduler" ? "active" : ""}`}
@@ -239,12 +214,6 @@ export default function App() {
             onClick={() => setActiveTab("moderation")}
           >
             💬 Social Inbox
-          </button>
-          <button
-            className={`nav-item ${activeTab === "ads" ? "active" : ""}`}
-            onClick={() => setActiveTab("ads")}
-          >
-            📈 Ads Campaign Manager
           </button>
           <button
             className={`nav-item ${activeTab === "profiles" ? "active" : ""}`}
@@ -285,34 +254,7 @@ export default function App() {
         <div className="content-body">
           {/* Render Active Tab Panel Placeholder */}
           {activeTab === "dashboard" && (
-            <div className="tab-panel animate-fade-in">
-              <div className="dashboard-grid">
-                <div className="glass-panel metric-card">
-                  <h3>Active Ad Spend</h3>
-                  <div className="metric-value">
-                    {summary.totalSpend.toLocaleString("en-US", { style: "currency", currency: "USD" })}
-                  </div>
-                  <p className="metric-subtext">Total campaign spend</p>
-                </div>
-                <div className="glass-panel metric-card">
-                  <h3>Clicks / Impressions</h3>
-                  <div className="metric-value">
-                    {summary.totalClicks.toLocaleString()} / {summary.totalImpressions.toLocaleString()}
-                  </div>
-                  <p className="metric-subtext">Conversions: {summary.totalConversions.toLocaleString()}</p>
-                </div>
-                <div className="glass-panel metric-card">
-                  <h3>CTR / CPC</h3>
-                  <div className="metric-value">
-                    {summary.ctr}% / ${summary.cpc}
-                  </div>
-                  <p className="metric-subtext">Averages calculated from ads CSV</p>
-                </div>
-              </div>
-              <div className="glass-panel chart-container-placeholder">
-                <p>Detailed performance graphs will appear here once CSV analytics sync.</p>
-              </div>
-            </div>
+            <OrganicDashboard token={token} companyId={activeCompanyId || ""} />
           )}
 
           {activeTab === "scheduler" && (
@@ -324,31 +266,7 @@ export default function App() {
           )}
 
           {activeTab === "ads" && (
-            <div className="tab-panel glass-panel animate-fade-in placeholder-panel">
-              <h3>📈 Ads Campaign Manager Slot</h3>
-              <p>Will fetch ad data, CTR, conversions, and handle spreadsheet reporting.</p>
-              <button 
-                className="glass-button" 
-                onClick={async () => {
-                  try {
-                    const res = await fetch(`${API_BASE}/api/analytics/sync-ads`, {
-                      method: "POST",
-                      headers: {
-                        Authorization: `Bearer ${token}`,
-                        "x-company-id": activeCompanyId || ""
-                      }
-                    });
-                    const data = await res.json();
-                    if (res.ok) alert("Ads sync triggered! Check terminal for background scraper logs.");
-                    else alert("Error: " + data.error);
-                  } catch (e) {
-                    alert("Network error triggering sync");
-                  }
-                }}
-              >
-                Sync Ads Data (Export CSV)
-              </button>
-            </div>
+            <AdsDashboard token={token} companyId={activeCompanyId || ""} />
           )}
 
           {activeTab === "profiles" && (

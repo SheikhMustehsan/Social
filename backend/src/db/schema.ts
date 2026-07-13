@@ -184,3 +184,15 @@ export const moderationRulesRelations = relations(moderationRules, ({ one }) => 
     references: [socialProfiles.id],
   }),
 }));
+// 8. Sync Jobs Table
+export const syncJobs = sqliteTable("sync_jobs", {
+  id: text("id").primaryKey().$defaultFn(() => crypto.randomUUID()),
+  companyId: text("company_id")
+    .references(() => companies.id, { onDelete: "cascade" })
+    .notNull(),
+  jobType: text("job_type").notNull(), // 'scrape_ads', 'scrape_organic'
+  status: text("status").notNull(), // 'pending', 'success', 'failed'
+  errorMessage: text("error_message"),
+  startedAt: integer("started_at", { mode: "timestamp" }).notNull(),
+  completedAt: integer("completed_at", { mode: "timestamp" }),
+});

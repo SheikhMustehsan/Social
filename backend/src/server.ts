@@ -13,6 +13,7 @@ import { moderationRoutes } from "./api/routes/moderation.js";
 
 // Load background workers
 import "./queue/worker.js";
+import { setupCronJobs } from "./queue/scheduler.js";
 
 dotenv.config();
 
@@ -55,6 +56,7 @@ fastify.get("/health", async (request, reply) => {
 // Start Server
 const start = async () => {
   try {
+    await setupCronJobs();
     await fastify.listen({ port, host: "0.0.0.0" });
     console.log(`📡 Server listening on port ${port}`);
   } catch (err) {

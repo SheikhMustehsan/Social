@@ -1,6 +1,6 @@
 import { Worker, Job } from "bullmq";
 import { db } from "../db/db.js";
-import { posts, socialProfiles } from "../db/schema.js";
+import { posts, socialProfiles, syncJobs } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { launchBrowserWithStorageState, launchBrowserWithProfile } from "../workers/utils/browserLauncher.js";
 import { publishToFacebookSuite } from "../workers/publishers/facebook.js";
@@ -12,11 +12,12 @@ import fs from "fs";
 
 import { scrapeAdsCSVReport } from "../workers/scrapers/adsScraper.js";
 import { parseAndSaveAdsCSV } from "../workers/scrapers/csvParser.js";
+import { scrapeOrganicMetrics } from "../workers/scrapers/organicScraper.js";
 import { crawlAndReplyComments } from "../workers/moderation/commentCrawler.js";
 import { scanInboxOnce } from "../workers/moderation/dmListener.js";
 
 interface JobData {
-  type: "publish_post" | "scrape_ads" | "crawl_comments" | "scan_dms";
+  type: "publish_post" | "scrape_ads" | "crawl_comments" | "scan_dms" | "scrape_ads_all" | "scrape_organic_all";
   postId?: string;
   profileId?: string;
   dateRange?: "last_30_days" | "this_month" | "last_month";
@@ -166,6 +167,37 @@ export const browserWorker = new Worker(
         await crawlAndReplyComments(profile.chromeProfilePath, url, profile.id, (profile as any).companyId, profile.platform);
       } else if (type === "scan_dms") {
         await scanInboxOnce(profile.chromeProfilePath, profile.platform as any, profile.id);
+      }
+    } 
+    // Handle global cron triggers
+    else if (type === "scrape_ads_all" || type === "scrape_organic_all") {
+      const allProfiles = await db.select().from(socialProfiles).where(eq(socialProfiles.status, "connected"));
+      
+      for (const profile of allProfiles) {
+        // Log sync job start
+        const [jobLog] = await db.insert(syncJobs).values({
+          companyId: profile.companyId,
+          jobType: type,
+          status: "pending",
+          startedAt: new Date()
+        }).returning();
+
+        try {
+          if (type === "scrape_ads_all") {
+            const adAccountId = (profile as any).adAccountId;
+            if (adAccountId) {
+              const csvPath = await scrapeAdsCSVReport(profile.chromeProfilePath, adAccountId, "this_month");
+              await parseAndSaveAdsCSV(csvPath, profile.companyId, profile.platform as any);
+            }
+          } else if (type === "scrape_organic_all") {
+            await scrapeOrganicMetrics(profile.companyId, profile.platform as any);
+          }
+          
+          await db.update(syncJobs).set({ status: "success", completedAt: new Date() }).where(eq(syncJobs.id, jobLog.id));
+        } catch (err: any) {
+          console.error(`Error in ${type} for profile ${profile.id}:`, err);
+          await db.update(syncJobs).set({ status: "failed", errorMessage: err.message, completedAt: new Date() }).where(eq(syncJobs.id, jobLog.id));
+        }
       }
     }
   },
