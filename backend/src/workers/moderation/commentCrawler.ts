@@ -151,9 +151,13 @@ export async function crawlAndReplyComments(
           // Determine if we should reply
           let replyToUse = null;
           for (const rule of commentRules) {
-            if (rule.triggerKeyword !== "*" && commentText.toLowerCase().includes(rule.triggerKeyword.toLowerCase())) {
-              replyToUse = rule.replyText;
-              break;
+            if (rule.triggerKeyword !== "*") {
+              const keywords = rule.triggerKeyword.split(",").map((k: string) => k.trim().toLowerCase()).filter((k: string) => k.length > 0);
+              const lowerComment = commentText.toLowerCase();
+              if (keywords.some((k: string) => lowerComment.includes(k))) {
+                replyToUse = rule.replyText;
+                break;
+              }
             }
           }
           if (!replyToUse) {
@@ -164,36 +168,34 @@ export async function crawlAndReplyComments(
           // Auto-Reply action
           if (replyToUse) {
             let replyBtn = null;
-            if (platform === "facebook") replyBtn = node.locator("div[role='button']:has-text('Reply'), span:has-text('Reply')").first();
-            else if (platform === "tiktok") replyBtn = node.locator("span:has-text('Reply')").first();
-            else if (platform === "linkedin") replyBtn = node.locator("button.comments-comment-social-bar__reply-action").first();
-            else replyBtn = node.locator("button:has-text('Reply')").first();
+            if (platform === "facebook") replyBtn = node.locator("div[role='button']:has-text('Reply'), span:has-text('Reply')").filter({ hasText: /^Reply$/i }).first();
+            else if (platform === "tiktok") replyBtn = node.locator("span:has-text('Reply'), div:has-text('Reply')").filter({ hasText: /^Reply$/i }).first();
+            else if (platform === "linkedin") replyBtn = node.locator("button.comments-comment-social-bar__reply-action, button:has-text('Reply')").first();
+            else replyBtn = node.locator("button:has-text('Reply'), span:has-text('Reply')").filter({ hasText: /^Reply$/i }).first();
             
             if (replyBtn && await replyBtn.isVisible()) {
               await replyBtn.click();
+              await page.waitForTimeout(1500);
+              
+              // Assume the reply button auto-focused the correct input box
+              await page.keyboard.insertText(replyToUse);
               await page.waitForTimeout(1000);
               
-              let replyInput = null;
-              if (platform === "tiktok") replyInput = page.locator("div[data-e2e='comment-input'] div[contenteditable='true']").first();
-              else if (platform === "linkedin") replyInput = page.locator("div.ql-editor[contenteditable='true']").first();
-              else replyInput = page.locator("textarea[placeholder*='comment'], [role='textbox']").first();
+              // Most platforms allow submitting via Enter
+              await page.keyboard.press('Enter');
+              await page.waitForTimeout(1000);
               
-              if (replyInput && await replyInput.isVisible()) {
-                await replyInput.focus();
-                await page.keyboard.insertText(replyToUse);
-                await page.waitForTimeout(1000);
-                
-                let postBtn = null;
-                if (platform === "tiktok") postBtn = page.locator("div[data-e2e='comment-post']").first();
-                else if (platform === "linkedin") postBtn = page.locator("button.comments-comment-box__submit-button").first();
-                else postBtn = page.locator("button:has-text('Post'), button[type='submit']").first();
-                
-                if (postBtn && await postBtn.isVisible()) {
-                  await postBtn.click();
-                  console.log(`  ✉️ Replied to comment from ${authorText.trim()}`);
-                }
-                await page.waitForTimeout(2000);
+              // For platforms that require a specific post button instead of Enter:
+              let postBtn = null;
+              if (platform === "linkedin") postBtn = page.locator("button.comments-comment-box__submit-button:visible, button.artdeco-button--primary:has-text('Post'):visible").last();
+              else if (platform === "tiktok") postBtn = page.locator("div[data-e2e='comment-post']:visible").last();
+              
+              if (postBtn && await postBtn.isVisible()) {
+                await postBtn.click();
               }
+              
+              console.log(`  ✉️ Replied to comment from ${authorText.trim()}`);
+              await page.waitForTimeout(2000);
             }
           }
         }

@@ -76,9 +76,13 @@ export async function scanInboxOnce(
         let replyToUse = null;
         if (incomingText) {
           for (const rule of rules) {
-            if (rule.triggerKeyword !== "*" && incomingText.toLowerCase().includes(rule.triggerKeyword.toLowerCase())) {
-              replyToUse = rule.replyText;
-              break;
+            if (rule.triggerKeyword !== "*") {
+              const keywords = rule.triggerKeyword.split(",").map((k: string) => k.trim().toLowerCase()).filter((k: string) => k.length > 0);
+              const lowerComment = incomingText.toLowerCase();
+              if (keywords.some((k: string) => lowerComment.includes(k))) {
+                replyToUse = rule.replyText;
+                break;
+              }
             }
           }
         }
