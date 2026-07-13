@@ -9,6 +9,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import crypto from "crypto";
+import { exec } from "child_process";
 
 export async function profileRoutes(fastify: FastifyInstance) {
   // Protect all profile endpoints with authentication
@@ -99,6 +100,12 @@ export async function profileRoutes(fastify: FastifyInstance) {
       console.log(`🖥️ Spawning headed browser session for: ${targetProfilePath}`);
       // Ensure Xvfb display is targeted
       process.env.DISPLAY = ":99";
+      
+      // Start VNC server so the user can connect via the UI
+      exec('killall x11vnc; x11vnc -display :99 -passwd 1234 -forever &', (err) => {
+        if (err) console.log("Note: x11vnc startup output (or killall failed):", err.message);
+      });
+
       const context = await launchBrowserWithProfile(targetProfilePath, { headless: false });
       const page = await context.newPage();
 
