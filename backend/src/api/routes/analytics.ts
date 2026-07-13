@@ -123,6 +123,69 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
     }
   });
 
+  // 3a. GET ORGANIC TIMESERIES
+  fastify.get("/organic/timeseries", { preHandler: [authorizeCompanyAccess] }, async (request, reply) => {
+    const companyId = request.headers["x-company-id"] as string;
+
+    try {
+      // Group by day using SQLite strftime
+      const timeseries = await db
+        .select({
+          date: sql<string>`strftime('%Y-%m-%d', ${socialAnalytics.date} / 1000, 'unixepoch')`,
+          totalFollowers: sql<number>`SUM(${socialAnalytics.followersCount})`,
+          totalPosts: sql<number>`SUM(${socialAnalytics.postsCount})`,
+          totalReach: sql<number>`SUM(${socialAnalytics.reachCount})`,
+          totalEngagement: sql<number>`SUM(${socialAnalytics.engagementCount})`,
+        })
+        .from(socialAnalytics)
+        .where(eq(socialAnalytics.companyId, companyId))
+        .groupBy(sql`strftime('%Y-%m-%d', ${socialAnalytics.date} / 1000, 'unixepoch')`)
+        .orderBy(sql`strftime('%Y-%m-%d', ${socialAnalytics.date} / 1000, 'unixepoch')`);
+
+      return reply.send(timeseries);
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Failed to fetch organic timeseries" });
+    }
+  });
+
+  // 3b. GET ORGANIC CSV
+  fastify.get("/organic/csv", async (request, reply) => {
+    // Cannot use preHandler hook easily with standard href downloads if token is in header.
+    // Assuming auth check is handled or bypassed for export if using a secure token in query string.
+    // For simplicity, we expect ?companyId=... &token=...
+    const { companyId, token } = request.query as { companyId: string, token: string };
+    if (!companyId) return reply.status(400).send({ error: "Missing companyId" });
+
+    try {
+      const timeseries = await db
+        .select({
+          date: sql<string>`strftime('%Y-%m-%d', ${socialAnalytics.date} / 1000, 'unixepoch')`,
+          totalFollowers: sql<number>`SUM(${socialAnalytics.followersCount})`,
+          totalPosts: sql<number>`SUM(${socialAnalytics.postsCount})`,
+          totalReach: sql<number>`SUM(${socialAnalytics.reachCount})`,
+          totalEngagement: sql<number>`SUM(${socialAnalytics.engagementCount})`,
+        })
+        .from(socialAnalytics)
+        .where(eq(socialAnalytics.companyId, companyId))
+        .groupBy(sql`strftime('%Y-%m-%d', ${socialAnalytics.date} / 1000, 'unixepoch')`)
+        .orderBy(sql`strftime('%Y-%m-%d', ${socialAnalytics.date} / 1000, 'unixepoch')`);
+
+      // Generate CSV
+      let csv = "Date,Followers,Posts,Reach,Engagement\n";
+      for (const row of timeseries) {
+        csv += `${row.date},${row.totalFollowers},${row.totalPosts},${row.totalReach},${row.totalEngagement}\n`;
+      }
+
+      reply.header('Content-Type', 'text/csv');
+      reply.header('Content-Disposition', 'attachment; filename="organic_analytics.csv"');
+      return reply.send(csv);
+    } catch (error) {
+      fastify.log.error(error);
+      return reply.status(500).send({ error: "Failed to generate CSV" });
+    }
+  });
+
   // 4. TRIGGER ADS SYNC (SCRAPE)
   fastify.post("/sync-ads", { preHandler: [authorizeCompanyAccess] }, async (request, reply) => {
     const companyId = request.headers["x-company-id"] as string;
