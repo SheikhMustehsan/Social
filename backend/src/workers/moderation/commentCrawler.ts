@@ -95,9 +95,9 @@ export async function crawlAndReplyComments(
       
       let commentsListSelector = "";
       if (platform === "facebook") {
-        commentsListSelector = "div[aria-label^='Comment by'][role='article']";
+        commentsListSelector = "div[aria-label^='Comment'][role='article'], div[role='article']:not([aria-label*='Post'])";
       } else if (platform === "tiktok") {
-        commentsListSelector = "div[class*='CommentItemWrapper']";
+        commentsListSelector = "div[class*='DivCommentItemContainer'], div[class*='CommentItemWrapper']";
       } else if (platform === "linkedin") {
         commentsListSelector = "article.comments-comment-item";
       } else {
