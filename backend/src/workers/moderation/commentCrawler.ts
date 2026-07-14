@@ -176,11 +176,29 @@ export async function crawlAndReplyComments(
             else if (platform === "linkedin") replyBtn = node.locator("button.comments-comment-social-bar__reply-action, button:has-text('Reply')").first();
             else replyBtn = node.locator("button:has-text('Reply'), span:has-text('Reply')").first();
             
-            if (replyBtn && await replyBtn.isVisible()) {
-              await replyBtn.click();
+            if (replyBtn && await replyBtn.count() > 0) {
+              // Hover over the comment to reveal hidden reply buttons
+              await node.hover().catch(() => {});
+              await page.waitForTimeout(500);
+              
+              // Force click the reply button even if Playwright thinks it's invisible
+              await replyBtn.click({ force: true }).catch(() => {});
               await page.waitForTimeout(1500);
               
-              // Assume the reply button auto-focused the correct input box
+              // Explicitly find and focus the input box
+              let inputSelector = "div[contenteditable='true'], textarea, input[type='text']";
+              if (platform === "tiktok") inputSelector = "div[data-e2e='comment-input'] div[contenteditable='true']";
+              else if (platform === "linkedin") inputSelector = "div.ql-editor[contenteditable='true'], div[role='textbox'][contenteditable='true']";
+              else if (platform === "facebook") inputSelector = "div[role='textbox'][contenteditable='true']";
+              else if (platform === "instagram") inputSelector = "textarea[placeholder*='Add a comment'], div[role='textbox']";
+              
+              const inputBox = page.locator(inputSelector).last();
+              if (await inputBox.count() > 0 && await inputBox.isVisible().catch(()=>false)) {
+                await inputBox.click({ force: true }).catch(() => {});
+                await page.waitForTimeout(500);
+              }
+              
+              // Type the reply
               await page.keyboard.insertText(replyToUse);
               await page.waitForTimeout(1000);
               
@@ -190,17 +208,17 @@ export async function crawlAndReplyComments(
               
               // For platforms that require a specific post button instead of Enter:
               let postBtn = null;
-              if (platform === "linkedin") postBtn = page.locator("button.comments-comment-box__submit-button:visible, button.artdeco-button--primary:has-text('Post'):visible").last();
-              else if (platform === "tiktok") postBtn = page.locator("div[data-e2e='comment-post']:visible").last();
+              if (platform === "linkedin") postBtn = page.locator("button.comments-comment-box__submit-button, button.artdeco-button--primary:has-text('Post')").last();
+              else if (platform === "tiktok") postBtn = page.locator("div[data-e2e='comment-post']").last();
               
-              if (postBtn && await postBtn.isVisible()) {
-                await postBtn.click();
+              if (postBtn && await postBtn.count() > 0) {
+                await postBtn.click({ force: true }).catch(() => {});
               }
               
               console.log(`  ✉️ Replied to comment from ${authorText.trim()}`);
               await page.waitForTimeout(2000);
             } else {
-              console.log(`  ⚠️ Reply button not visible for ${authorText.trim()}`);
+              console.log(`  ⚠️ Reply button not found for ${authorText.trim()}`);
             }
           }
         }
