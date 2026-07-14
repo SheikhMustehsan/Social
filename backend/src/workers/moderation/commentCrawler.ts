@@ -69,8 +69,8 @@ export async function crawlAndReplyComments(
       // If we are on the main profile grid, we need to click the 1 most recent post
       if (target.isGrid) {
         let postSelector = "";
-        if (platform === "instagram") postSelector = "a[href^='/p/']";
-        else if (platform === "facebook") postSelector = "div[data-pagelet='ProfileTimeline'] a[href*='/posts/'], div[data-pagelet='ProfileTimeline'] a[href*='/videos/']";
+        if (platform === "instagram") postSelector = "a[href^='/p/'], a[href*='/reel/']";
+        else if (platform === "facebook") postSelector = "div[role='article'] a[href*='/posts/'], div[role='article'] a[href*='/videos/'], a[href*='/posts/'], a[href*='/videos/']";
         else if (platform === "tiktok") postSelector = "div[data-e2e='user-post-item'] a";
         else if (platform === "linkedin") postSelector = "div.feed-shared-update-v2"; 
 
@@ -99,7 +99,7 @@ export async function crawlAndReplyComments(
       } else if (platform === "tiktok") {
         commentsListSelector = "div[class*='DivCommentItemContainer'], div[class*='CommentItemWrapper']";
       } else if (platform === "linkedin") {
-        commentsListSelector = "article.comments-comment-item";
+        commentsListSelector = "article.comments-comment-item, article.comments-comment-entity, div.comments-comments-list__comment-item, article[data-urn*='comment']";
       } else {
         commentsListSelector = "ul._a9z6, li._a9zs, ul._a9zs, article"; // Instagram
       }
