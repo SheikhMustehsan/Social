@@ -62,6 +62,11 @@ export async function crawlAndReplyComments(
 
   try {
     for (const target of urlsToCrawl) {
+      // Auto-fix URLs with spaces
+      if (target.url.includes(" ")) {
+        target.url = target.url.replace(/\s+/g, "");
+      }
+      
       console.log(`➡️ Comment Crawler: Navigating to ${target.url}...`);
       await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: 45000 });
       await page.waitForTimeout(5000);
@@ -95,9 +100,9 @@ export async function crawlAndReplyComments(
       
       let commentsListSelector = "";
       if (platform === "facebook") {
-        commentsListSelector = "div[aria-label^='Comment'][role='article'], div[role='article']:not([aria-label*='Post'])";
+        commentsListSelector = "div[aria-label^='Comment'][role='article'], div[role='article']:not([aria-label*='Post']), div[dir='auto']:has(> div > span > a[role='link'])";
       } else if (platform === "tiktok") {
-        commentsListSelector = "div[class*='DivCommentItemContainer'], div[class*='CommentItemWrapper']";
+        commentsListSelector = "div[class*='DivCommentItemContainer'], div[class*='CommentItemWrapper'], div[class*='comment-item'], div[class*='CommentItem']";
       } else if (platform === "linkedin") {
         commentsListSelector = "article.comments-comment-item, article.comments-comment-entity, div.comments-comments-list__comment-item, article[data-urn*='comment']";
       } else {
@@ -115,18 +120,20 @@ export async function crawlAndReplyComments(
 
         if (platform === "facebook") {
           const ariaLabel = await node.getAttribute('aria-label').catch(() => null);
-          if (ariaLabel && ariaLabel.startsWith("Comment by")) {
-            authorText = ariaLabel.replace("Comment by ", "").split(/( \d+ (minute|hour|day|week|month|year)s? ago)/)[0].trim();
+          if (ariaLabel && ariaLabel.startsWith("Comment")) {
+            authorText = ariaLabel.replace(/Comment (by|from) /, "").split(/( \d+ (minute|hour|day|week|month|year)s? ago)/)[0].trim();
           }
           const texts = await node.locator("div[dir='auto']").allTextContents().catch(() => []);
           if (texts.length > 1) commentText = texts.slice(1).join(" ");
           else if (texts.length === 1 && texts[0] !== authorText) commentText = texts[0];
+          
+          if (!authorText) authorText = await node.locator("a[role='link'], span[dir='auto']").first().textContent().catch(() => "") || "";
         } else if (platform === "tiktok") {
-          authorText = await node.locator("span[data-e2e='comment-username-1'], span[class*='UserNameText']").first().textContent().catch(() => "") || "";
-          commentText = await node.locator("p[data-e2e='comment-level-1'], p[class*='CommentText']").first().textContent().catch(() => "") || "";
+          authorText = await node.locator("span[data-e2e='comment-username-1'], span[class*='UserNameText'], a[class*='UserLink']").first().textContent().catch(() => "") || "";
+          commentText = await node.locator("p[data-e2e='comment-level-1'], p[class*='CommentText'], span[data-e2e='comment-level-1']").first().textContent().catch(() => "") || "";
         } else if (platform === "linkedin") {
-          authorText = await node.locator("span.comments-post-meta__name-text").first().textContent().catch(() => "") || "";
-          commentText = await node.locator("div.comments-comment-item__main-content").first().textContent().catch(() => "") || "";
+          authorText = await node.locator("span.comments-post-meta__name-text, span.comments-comment-meta__name-text, a[data-control-name='comment_actor'] span[dir='ltr'], span.comments-comment-meta__name").first().textContent().catch(() => "") || "";
+          commentText = await node.locator("div.comments-comment-item__main-content, div.comments-comment-item-content-body, div.update-components-text, span.comments-comment-item__main-content").first().textContent().catch(() => "") || "";
         } else {
           authorText = await node.locator("h3, a._a9zc, strong").first().textContent().catch(() => "") || "";
           commentText = await node.locator("span._ap3a, span").first().textContent().catch(() => "") || "";
