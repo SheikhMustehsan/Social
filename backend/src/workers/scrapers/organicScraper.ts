@@ -1,7 +1,7 @@
 import { db } from "../../db/db.js";
 import { socialProfiles, socialAnalytics } from "../../db/schema.js";
 import { eq, and } from "drizzle-orm";
-import { launchBrowserWithStorageState } from "../utils/browserLauncher.js";
+import { launchBrowserWithProfile } from "../utils/browserLauncher.js";
 
 declare const document: any;
 
@@ -28,7 +28,7 @@ export async function scrapeOrganicMetrics(companyId: string, platform: "faceboo
     if (profile.status !== "connected" || !profile.chromeProfilePath) continue;
 
     console.log(`[OrganicScraper] Launching browser for profile ID: ${profile.id}`);
-    const context = await launchBrowserWithStorageState(profile.chromeProfilePath, { headless: false });
+    const context = await launchBrowserWithProfile(profile.chromeProfilePath, { headless: false });
     
     try {
       const page = await context.newPage();
