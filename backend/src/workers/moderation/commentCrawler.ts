@@ -96,7 +96,7 @@ export async function crawlAndReplyComments(
       // Scroll slightly to trigger comment loading
       // @ts-ignore
       await page.evaluate(() => window.scrollBy(0, 1500));
-      await page.waitForTimeout(4000);
+      await page.waitForTimeout(8000);
       
       let commentsListSelector = "";
       if (platform === "facebook") {
@@ -104,7 +104,7 @@ export async function crawlAndReplyComments(
       } else if (platform === "tiktok") {
         commentsListSelector = "div[class*='DivCommentItemContainer'], div[class*='CommentItemWrapper'], div[class*='comment-item'], div[class*='CommentItem']";
       } else if (platform === "linkedin") {
-        commentsListSelector = "article.comments-comment-item, article.comments-comment-entity, div.comments-comments-list__comment-item, article[data-urn*='comment']";
+        commentsListSelector = "article.comments-comment-item, article.comments-comment-entity, div.comments-comments-list__comment-item, article[data-urn*='comment'], div.comment";
       } else {
         commentsListSelector = "ul._a9z6, li._a9zs, ul._a9zs, article"; // Instagram
       }
@@ -132,8 +132,10 @@ export async function crawlAndReplyComments(
           authorText = await node.locator("span[data-e2e='comment-username-1'], span[class*='UserNameText'], a[class*='UserLink']").first().textContent().catch(() => "") || "";
           commentText = await node.locator("p[data-e2e='comment-level-1'], p[class*='CommentText'], span[data-e2e='comment-level-1']").first().textContent().catch(() => "") || "";
         } else if (platform === "linkedin") {
-          authorText = await node.locator("span.comments-post-meta__name-text, span.comments-comment-meta__name-text, a[data-control-name='comment_actor'] span[dir='ltr'], span.comments-comment-meta__name").first().textContent().catch(() => "") || "";
-          commentText = await node.locator("div.comments-comment-item__main-content, div.comments-comment-item-content-body, div.update-components-text, span.comments-comment-item__main-content").first().textContent().catch(() => "") || "";
+          authorText = await node.locator(".comments-post-meta__name-text, .comments-comment-meta__name-text, [data-control-name='comment_actor']").first().textContent().catch(() => "") || "";
+          commentText = await node.locator(".comments-comment-item__main-content, .comments-comment-item-content-body, .update-components-text").first().textContent().catch(() => "") || "";
+          if (!authorText) authorText = await node.locator("a.app-aware-link").first().textContent().catch(()=>"") || "";
+          if (!commentText) commentText = await node.locator("div[dir='ltr']").last().textContent().catch(()=>"") || "";
         } else {
           authorText = await node.locator("h3, a._a9zc, strong").first().textContent().catch(() => "") || "";
           commentText = await node.locator("span._ap3a, span").first().textContent().catch(() => "") || "";

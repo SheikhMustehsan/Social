@@ -36,14 +36,12 @@ export async function scrapeOrganicMetrics(companyId: string, platform: "faceboo
       let postsCount = 0;
 
       if (platform === "instagram") {
-        await page.goto("https://www.instagram.com/", { waitUntil: "networkidle" });
+        await page.goto("https://www.instagram.com/", { waitUntil: "domcontentloaded", timeout: 45000 });
         await page.waitForTimeout(3000);
         
-        // Try to click on the Profile tab (the bottom left or side menu avatar)
-        // Usually href contains the username.
         const profileLink = await page.$('a[href*="/"] img[alt*="profile"]');
         if (profileLink) {
-          await profileLink.click();
+          await profileLink.click({ force: true });
           await page.waitForTimeout(3000);
           
           // Fallback parsing from meta tags or generic lists
@@ -57,7 +55,7 @@ export async function scrapeOrganicMetrics(companyId: string, platform: "faceboo
           }
         }
       } else if (platform === "facebook") {
-        await page.goto("https://www.facebook.com/me", { waitUntil: "networkidle" });
+        await page.goto("https://www.facebook.com/me", { waitUntil: "domcontentloaded", timeout: 45000 });
         await page.waitForTimeout(3000);
         
         // Find follower text (e.g. "1.5K followers")
@@ -66,6 +64,27 @@ export async function scrapeOrganicMetrics(companyId: string, platform: "faceboo
         
         if (followerMatch) {
           let numStr = followerMatch[1].replace(/,/g, "");
+          let multiplier = 1;
+          if (numStr.endsWith("K")) multiplier = 1000;
+          if (numStr.endsWith("M")) multiplier = 1000000;
+          numStr = numStr.replace(/[KMB]/, "");
+          followersCount = Math.floor(parseFloat(numStr) * multiplier);
+        }
+      } else if (platform === "linkedin") {
+        await page.goto("https://www.linkedin.com/feed/", { waitUntil: "domcontentloaded", timeout: 45000 });
+        await page.waitForTimeout(3000);
+        const bodyText = await page.evaluate(() => document.body.innerText);
+        const connMatch = bodyText.match(/([\d,.]+)\s*connections?/i) || bodyText.match(/([\d,.]+)\s*followers?/i);
+        if (connMatch) {
+          followersCount = parseInt(connMatch[1].replace(/,/g, ""), 10) || 0;
+        }
+      } else if (platform === "tiktok") {
+        await page.goto("https://www.tiktok.com/", { waitUntil: "domcontentloaded", timeout: 45000 });
+        await page.waitForTimeout(3000);
+        const bodyText = await page.evaluate(() => document.body.innerText);
+        const follMatch = bodyText.match(/([\d,.]+[KMB]?)\s*Followers/i);
+        if (follMatch) {
+          let numStr = follMatch[1].replace(/,/g, "");
           let multiplier = 1;
           if (numStr.endsWith("K")) multiplier = 1000;
           if (numStr.endsWith("M")) multiplier = 1000000;
