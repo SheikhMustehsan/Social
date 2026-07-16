@@ -112,6 +112,15 @@ export async function crawlAndReplyComments(
       const commentNodes = page.locator(commentsListSelector);
       const count = await commentNodes.count();
       console.log(`💬 Found ${count} comment containers on page.`);
+      
+      if (count === 0 && (platform === "tiktok" || platform === "facebook" || platform === "linkedin")) {
+         const fullHtml = await page.content().catch(() => "");
+         if (fullHtml) {
+            const fs = require('fs');
+            fs.writeFileSync(`/home/dccdev/Social/backend/data/${platform}_page_dump.html`, fullHtml);
+            console.log(`📄 Dumped full ${platform} page HTML to data directory for debugging.`);
+         }
+      }
 
       for (let i = 0; i < Math.min(count, 15); i++) {
         const node = commentNodes.nth(i);
@@ -139,6 +148,16 @@ export async function crawlAndReplyComments(
         } else {
           authorText = await node.locator("h3, a._a9zc, strong").first().textContent().catch(() => "") || "";
           commentText = await node.locator("span._ap3a, span").first().textContent().catch(() => "") || "";
+        }
+
+        if (!authorText || !commentText) {
+           console.log(`⚠️ Failed to parse author or text. Author: "${authorText}", Text: "${commentText}"`);
+           // Dump HTML for debugging
+           const html = await node.evaluate((el: any) => el.outerHTML).catch(() => "");
+           if (html) {
+              const fs = require('fs');
+              fs.writeFileSync(`/home/dccdev/Social/backend/data/${platform}_comment_node_dump.html`, html);
+           }
         }
 
         if (authorText && commentText) {
