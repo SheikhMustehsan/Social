@@ -97,6 +97,15 @@ export async function crawlAndReplyComments(
       // Scroll slightly to trigger comment loading
       // @ts-ignore
       await page.evaluate(() => window.scrollBy(0, 1500));
+
+      if (platform === "tiktok") {
+         // Click the comment icon if comments aren't auto-loading
+         const commentIcon = page.locator("[data-e2e='comment-icon'], [aria-label*='comment']").first();
+         if (await commentIcon.isVisible().catch(() => false)) {
+            await commentIcon.click({ force: true }).catch(() => {});
+         }
+      }
+
       await page.waitForTimeout(8000);
       
       let commentsListSelector = "";
@@ -141,7 +150,7 @@ export async function crawlAndReplyComments(
           authorText = await node.locator("span[data-e2e='comment-username-1'], span[class*='UserNameText'], a[class*='UserLink']").first().textContent().catch(() => "") || "";
           commentText = await node.locator("p[data-e2e='comment-level-1'], p[class*='CommentText'], span[data-e2e='comment-level-1']").first().textContent().catch(() => "") || "";
         } else if (platform === "linkedin") {
-          authorText = await node.locator(".comments-post-meta__name-text, .comments-comment-meta__name-text, [data-control-name='comment_actor']").first().textContent().catch(() => "") || "";
+          authorText = await node.locator(".comments-post-meta__name-text, .comments-comment-meta__name-text, .comments-comment-meta__description-title, [data-control-name='comment_actor']").first().textContent().catch(() => "") || "";
           commentText = await node.locator(".comments-comment-item__main-content, .comments-comment-item-content-body, .update-components-text").first().textContent().catch(() => "") || "";
           if (!authorText) authorText = await node.locator("a.app-aware-link").first().textContent().catch(()=>"") || "";
           if (!commentText) commentText = await node.locator("div[dir='ltr']").last().textContent().catch(()=>"") || "";
