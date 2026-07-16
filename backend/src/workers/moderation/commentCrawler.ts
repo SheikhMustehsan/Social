@@ -2,6 +2,7 @@ import { BrowserContext, Page } from "playwright";
 import { launchBrowserWithProfile } from "../utils/browserLauncher.js";
 import path from "path";
 import fs from "fs";
+import { BullMQError } from "../../utils/errors.js";
 import { db } from "../../db/db.js";
 import { moderationRules } from "../../db/schema.js";
 import { eq, and, or, isNull } from "drizzle-orm";
@@ -116,7 +117,6 @@ export async function crawlAndReplyComments(
       if (count === 0 && (platform === "tiktok" || platform === "facebook" || platform === "linkedin")) {
          const fullHtml = await page.content().catch(() => "");
          if (fullHtml) {
-            const fs = require('fs');
             fs.writeFileSync(`/home/dccdev/Social/backend/data/${platform}_page_dump.html`, fullHtml);
             console.log(`📄 Dumped full ${platform} page HTML to data directory for debugging.`);
          }
@@ -155,7 +155,6 @@ export async function crawlAndReplyComments(
            // Dump HTML for debugging
            const html = await node.evaluate((el: any) => el.outerHTML).catch(() => "");
            if (html) {
-              const fs = require('fs');
               fs.writeFileSync(`/home/dccdev/Social/backend/data/${platform}_comment_node_dump.html`, html);
            }
         }
