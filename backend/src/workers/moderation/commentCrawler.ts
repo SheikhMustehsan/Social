@@ -101,8 +101,9 @@ export async function crawlAndReplyComments(
       if (platform === "tiktok") {
          // Click the comment icon if comments aren't auto-loading
          const commentIcon = page.locator("[data-e2e='comment-icon'], [aria-label*='comment']").first();
-         if (await commentIcon.isVisible().catch(() => false)) {
-            await commentIcon.click({ force: true }).catch(() => {});
+         if (await commentIcon.count().catch(() => 0) > 0) {
+            await commentIcon.evaluate((el: any) => el.click()).catch(() => {});
+            await page.waitForTimeout(3000);
          }
       }
 
@@ -151,6 +152,14 @@ export async function crawlAndReplyComments(
           commentText = await node.locator("p[data-e2e='comment-level-1'], p[class*='CommentText'], span[data-e2e='comment-level-1']").first().textContent().catch(() => "") || "";
         } else if (platform === "linkedin") {
           authorText = await node.locator(".comments-post-meta__name-text, .comments-comment-meta__name-text, .comments-comment-meta__description-title, [data-control-name='comment_actor']").first().textContent().catch(() => "") || "";
+          if (!authorText) {
+             const rawAlt = await node.locator("img[alt*='View']").first().getAttribute("alt").catch(() => "");
+             if (rawAlt) authorText = rawAlt.replace("View ", "").replace("’s  graphic", "").replace("’s graphic", "").trim();
+          }
+          if (!authorText) {
+             const rawAria = await node.locator("a.comments-comment-meta__description-container").first().getAttribute("aria-label").catch(() => "");
+             if (rawAria) authorText = rawAria.replace("View:", "").split("•")[0].trim();
+          }
           commentText = await node.locator(".comments-comment-item__main-content, .comments-comment-item-content-body, .update-components-text").first().textContent().catch(() => "") || "";
           if (!authorText) authorText = await node.locator("a.app-aware-link").first().textContent().catch(()=>"") || "";
           if (!commentText) commentText = await node.locator("div[dir='ltr']").last().textContent().catch(()=>"") || "";
