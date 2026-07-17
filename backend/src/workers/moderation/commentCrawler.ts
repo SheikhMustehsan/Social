@@ -102,8 +102,8 @@ export async function crawlAndReplyComments(
          // Click the comment icon if comments aren't auto-loading
          const commentIcon = page.locator("[data-e2e='comment-icon'], [aria-label*='comment']").first();
          if (await commentIcon.count().catch(() => 0) > 0) {
-            await commentIcon.evaluate((el: any) => el.click()).catch(() => {});
-            await page.waitForTimeout(3000);
+            await commentIcon.click({ force: true }).catch(() => {});
+            await page.waitForTimeout(5000);
          }
       }
 
@@ -151,18 +151,21 @@ export async function crawlAndReplyComments(
           authorText = await node.locator("span[data-e2e='comment-username-1'], span[class*='UserNameText'], a[class*='UserLink']").first().textContent().catch(() => "") || "";
           commentText = await node.locator("p[data-e2e='comment-level-1'], p[class*='CommentText'], span[data-e2e='comment-level-1']").first().textContent().catch(() => "") || "";
         } else if (platform === "linkedin") {
-          authorText = await node.locator(".comments-post-meta__name-text, .comments-comment-meta__name-text, .comments-comment-meta__description-title, [data-control-name='comment_actor']").first().textContent().catch(() => "") || "";
-          if (!authorText) {
-             const rawAlt = await node.locator("img[alt*='View']").first().getAttribute("alt").catch(() => "");
-             if (rawAlt) authorText = rawAlt.replace("View ", "").replace("’s  graphic", "").replace("’s graphic", "").trim();
-          }
-          if (!authorText) {
-             const rawAria = await node.locator("a.comments-comment-meta__description-container").first().getAttribute("aria-label").catch(() => "");
-             if (rawAria) authorText = rawAria.replace("View:", "").split("•")[0].trim();
-          }
-          commentText = await node.locator(".comments-comment-item__main-content, .comments-comment-item-content-body, .update-components-text").first().textContent().catch(() => "") || "";
-          if (!authorText) authorText = await node.locator("a.app-aware-link").first().textContent().catch(()=>"") || "";
-          if (!commentText) commentText = await node.locator("div[dir='ltr']").last().textContent().catch(()=>"") || "";
+          authorText = await node.evaluate((el: any) => {
+             const title = el.querySelector(".comments-comment-meta__description-title, .comments-post-meta__name-text, .comments-comment-meta__name-text, h3 span");
+             if (title && (title.innerText || title.textContent)) return (title.innerText || title.textContent).trim();
+             const img = el.querySelector("img[alt*='View']");
+             if (img && img.getAttribute("alt")) return img.getAttribute("alt").replace("View ", "").replace(/’s\\s*graphic/g, "").trim();
+             const a = el.querySelector("a[aria-label*='View:']");
+             if (a && a.getAttribute("aria-label")) return a.getAttribute("aria-label").replace("View:", "").split("•")[0].trim();
+             return "";
+          }).catch(() => "");
+          
+          commentText = await node.evaluate((el: any) => {
+             const txt = el.querySelector(".comments-comment-item__main-content, .comments-comment-item-content-body, .update-components-text, div[dir='ltr']");
+             if (txt) return txt.innerText || txt.textContent;
+             return "";
+          }).catch(() => "");
         } else {
           authorText = await node.locator("h3, a._a9zc, strong").first().textContent().catch(() => "") || "";
           commentText = await node.locator("span._ap3a, span").first().textContent().catch(() => "") || "";
