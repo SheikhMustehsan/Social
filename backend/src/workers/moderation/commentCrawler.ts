@@ -122,7 +122,7 @@ export async function crawlAndReplyComments(
         if (platform === "instagram") postSelector = "a[href^='/p/'], a[href*='/reel/']";
         else if (platform === "facebook") postSelector = "div[role='article'] a[href*='/posts/'], a[href*='/posts/'], a[href*='/videos/']";
         else if (platform === "tiktok") postSelector = "div[data-e2e='user-post-item'] a, a[href*='/video/']";
-        else if (platform === "linkedin") postSelector = "div.feed-shared-update-v2 a.app-aware-link, div.occludable-update div[data-id]";
+        else if (platform === "linkedin") postSelector = "div.feed-shared-update-v2, main div[data-urn], div.occludable-update";
 
         if (postSelector) {
           const firstPost = page.locator(postSelector).first();
@@ -225,47 +225,44 @@ export async function crawlAndReplyComments(
             });
 
           } else if (plat === "instagram") {
-            // Instagram comment list items — try multiple selector patterns
-            const nodes = document.querySelectorAll(
-              'ul li[role="menuitem"], ' +
-              'div[role="listitem"], ' +
-              'li._a9zr, ' +
-              'ul._a9ym li'
-            );
+            // Instagram: comments are in li._a9zr elements inside ul
+            const nodes = document.querySelectorAll('li._a9zr, ul[class*="_a9ym"] li, div[role="listitem"]');
             nodes.forEach((node: Element) => {
-              // Author: first bold/link element
-              const authorEl = node.querySelector('h3 a, h2 a, a._acan, a[role="link"], span._aap6 a') as HTMLElement;
+              // Author is a link with a span containing the username
+              const authorEl = node.querySelector('h3 a, h2 a, a._a6hd span, span._aap6 a span, a[href*="/"] span') as HTMLElement;
               const author = authorEl?.textContent?.trim() || "";
-              // Text: any span with text that isn't the author name
-              const spans = Array.from(node.querySelectorAll('span[dir="auto"], div[dir="auto"], span._aacl')) as HTMLElement[];
-              const textEl = spans.find(s => s.textContent?.trim() !== author && (s.textContent?.trim() || "").length > 0);
+              // Text: span with dir=auto that's not the author
+              const allSpans = Array.from(node.querySelectorAll('span[dir="auto"], div[dir="auto"]')) as HTMLElement[];
+              const textEl = allSpans.find(s => {
+                const t = s.textContent?.trim() || "";
+                return t.length > 0 && t !== author && !s.querySelector('a');
+              });
               const text = textEl?.textContent?.trim() || "";
               if (text && author) comments.push({ author, text });
             });
 
           } else if (plat === "linkedin") {
-            // LinkedIn comment articles
+            // LinkedIn: real comment container class is comments-comment-entity
             const nodes = document.querySelectorAll(
+              'article.comments-comment-entity, ' +
               'article.comments-comment-item, ' +
-              'article[data-id], ' +
               'li.comments-comment-item'
             );
             nodes.forEach((node: Element) => {
-              // Author name
+              // Author: in .comments-comment-meta__description-title span
               const authorEl = node.querySelector(
-                '.comments-post-meta__name-text span[aria-hidden="true"], ' +
-                'span.comments-post-meta__name-text, ' +
-                '.comment__actor-name, ' +
-                'span.feed-shared-actor__name'
+                '.comments-comment-meta__description-title span:not(.visually-hidden), ' +
+                'h3.comments-comment-meta__description span:first-child, ' +
+                '.comments-post-meta__name-text span[aria-hidden="true"]'
               ) as HTMLElement;
               const author = authorEl?.textContent?.trim() || "Unknown";
 
-              // Comment text
+              // Text: the actual comment content (not metadata)
               const textEl = node.querySelector(
                 '.comments-comment-item__main-content, ' +
-                'span.comments-comment-item__inline-show-more-text, ' +
-                '.update-components-text span[dir="ltr"], ' +
-                'p[dir="ltr"]'
+                'span[dir="ltr"], ' +
+                'p[dir="ltr"], ' +
+                '.update-components-text span'
               ) as HTMLElement;
               const text = textEl?.textContent?.trim() || "";
 
