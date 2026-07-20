@@ -177,9 +177,11 @@ export async function crawlAndReplyComments(
       }
 
       // Now we are on a post (either via track URL or clicked from grid)
-      // Scroll slightly to trigger comment loading
-      // @ts-ignore
-      await page.evaluate(() => window.scrollBy(0, 1500));
+      // Scroll slightly to trigger comment loading (skip for TikTok/Instagram to avoid breaking layouts)
+      if (platform !== "tiktok" && platform !== "instagram") {
+        // @ts-ignore
+        await page.evaluate(() => window.scrollBy(0, 1500));
+      }
 
       // Close common login popups that obscure the screen
       try {
@@ -497,9 +499,15 @@ export async function crawlAndReplyComments(
             try {
               const boxContainer = inputBox.locator('xpath=ancestor::form | ancestor::div[contains(@class, "comment")]').first();
               if (await boxContainer.count() > 0) {
-                const submitBtn = boxContainer.locator('button:has-text("Reply"), button:has-text("Post"), button[type="submit"], button[class*="submit"] >> visible=true').first();
+                const submitBtn = boxContainer.locator(
+                  'button:has-text("Reply"), button:has-text("Post"), ' +
+                  '[role="button"]:has-text("Reply"), [role="button"]:has-text("Post"), ' +
+                  'button[type="submit"], button[class*="submit"] >> visible=true'
+                ).first();
                 if (await submitBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-                  await submitBtn.click({ force: true });
+                  await submitBtn.click().catch(async () => {
+                    await submitBtn.click({ force: true }).catch(() => {});
+                  });
                   console.log(`  ✉️ Clicked Submit/Reply button inside local container.`);
                   posted = true;
                 }
@@ -516,16 +524,35 @@ export async function crawlAndReplyComments(
                 'button:has-text("Reply"), ' +
                 'button.artdeco-button--primary:has-text("Post"), ' +
                 'button:has-text("Post"), ' +
+                '[role="button"]:has-text("Reply"), ' +
+                '[role="button"]:has-text("Post"), ' +
                 'button[type="submit"] >> visible=true'
               ).last();
               if (await postBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-                await postBtn.click({ force: true });
+                await postBtn.click().catch(async () => {
+                  await postBtn.click({ force: true }).catch(() => {});
+                });
                 console.log(`  ✉️ Clicked fallback Post/Reply button.`);
               } else {
                 await page.keyboard.press("Enter");
                 console.log(`  ✉️ Pressed Enter to post reply.`);
               }
             }
+
+            // Wait 2s to check if the input box cleared or disappeared.
+            // If it is still visible and has text, force submit using Enter keypress.
+            await page.waitForTimeout(2000);
+            const isStillVisible = await inputBox.isVisible().catch(() => false);
+            if (isStillVisible) {
+              const textVal = await inputBox.innerText().catch(() => "");
+              if (textVal.trim().length > 0) {
+                console.log(`  ⚠️ Input box still contains text after click. Pressing Enter to force submit...`);
+                await inputBox.click();
+                await page.keyboard.press("Enter");
+                await page.waitForTimeout(2000);
+              }
+            }
+
             console.log(`  ✅ Reply posted to ${authorText.trim()}`);
             await page.waitForTimeout(2000);
           } else {
