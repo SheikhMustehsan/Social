@@ -276,6 +276,17 @@ export async function crawlAndReplyComments(
         await page.waitForTimeout(1000);
       }
 
+      // Check for TikTok CAPTCHA again here as it is often triggered during scroll/click actions
+      if (platform === "tiktok") {
+        try {
+          const captcha = page.locator('div[id*="captcha"], div[class*="captcha"], div[class*="secsdk"], canvas');
+          if (await captcha.first().isVisible({ timeout: 2000 }).catch(() => false)) {
+            console.log("⚠️ TikTok CAPTCHA detected before extraction. Waiting 15s for manual solve...");
+            await page.waitForTimeout(15000);
+          }
+        } catch (_) {}
+      }
+
       // ── Extract comments via DOM ──────────────────────────────────────────
       console.log(`🤖 Extracting comments via DOM for ${platform}...`);
       
@@ -433,9 +444,10 @@ export async function crawlAndReplyComments(
             const wrapper = commentWrappers.nth(i);
             const wrapperText = await wrapper.textContent().catch(() => "");
             if (wrapperText && wrapperText.includes(authorText.trim())) {
-              // Found the comment wrapper — look for Reply button inside
+              // Found the comment wrapper — look for Reply button inside (broadened to support [role=button])
               const replyBtn = wrapper.locator(
-                'button:has-text("Reply"), span:has-text("Reply"), a:has-text("Reply"), ' +
+                'button:has-text("Reply"), [role="button"]:has-text("Reply"), ' +
+                'span:has-text("Reply"), a:has-text("Reply"), ' +
                 'div[data-e2e="comment-reply-1"], button[data-e2e="comment-reply"]'
               ).first();
               if (await replyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
@@ -462,6 +474,7 @@ export async function crawlAndReplyComments(
 
         if (!replied) {
           console.log(`  ⚠️ Could not click reply button for ${authorText.trim()}.`);
+          await page.screenshot({ path: `debug_reply_click_fail_${platform}_${authorText.replace(/[^a-zA-Z0-9]/g, "")}.png` });
           continue;
         }
 
