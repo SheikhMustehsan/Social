@@ -1,6 +1,4 @@
-import { BrowserContext, Page } from "playwright";
 import { launchBrowserWithProfile } from "../utils/browserLauncher.js";
-import path from "path";
 import fs from "fs";
 import { db } from "../../db/db.js";
 import { moderationRules } from "../../db/schema.js";
@@ -53,12 +51,17 @@ export async function crawlAndReplyComments(
   }
   
   // 2. Add fallback to main profile page grid
-  if (profileUrl) {
+  if (profileUrl && !profileUrl.includes("null")) {
     const isGrid = !profileUrl.includes('/video/') && 
-                   !profileUrl.includes('/posts/') && 
-                   !profileUrl.includes('/p/') && 
+                   !profileUrl.includes('/posts/') &&
+                   !profileUrl.includes('/p/') &&
                    !profileUrl.includes('/feed/update/');
     urlsToCrawl.push({ url: profileUrl, isGrid });
+  }
+
+  if (urlsToCrawl.length === 0) {
+    console.log(`⚠️ No URLs to crawl for profile ${socialProfileId}. Skipping.`);
+    return [];
   }
 
   const context = await launchBrowserWithProfile(profilePath, { headless: false });
@@ -76,123 +79,237 @@ export async function crawlAndReplyComments(
       await page.goto(target.url, { waitUntil: "domcontentloaded", timeout: 45000 });
       await page.waitForTimeout(5000);
 
-      // If we are on the main profile grid, we need to click the 1 most recent post
+      // ── PLATFORM-SPECIFIC: Handle TikTok CAPTCHA puzzle ──────────────────
+      if (platform === "tiktok") {
+        try {
+          const captcha = page.locator('div[id*="captcha"], div[class*="captcha"], div[class*="secsdk"], canvas');
+          if (await captcha.first().isVisible({ timeout: 3000 }).catch(() => false)) {
+            console.log("⚠️ TikTok CAPTCHA detected. Waiting 15s for manual solve or auto-timeout...");
+            await page.waitForTimeout(15000);
+          }
+        } catch (_) {}
+      }
+
+      // ── Close common login/cookie/notification popups ─────────────────────
+      try {
+        const popupSelectors = [
+          'button[aria-label="Dismiss"]',
+          'button[aria-label="Close"]',
+          'div[role="dialog"] button[aria-label="Close"]',
+          'button[data-testid="close-button"]',
+          'div[aria-label="Close"] svg',
+          // Instagram login nudge
+          'div[role="dialog"] button:has-text("Not Now")',
+          'div[role="dialog"] button:has-text("Cancel")',
+          // TikTok login popup
+          'div[data-e2e="modal-close-inner-button"]',
+          'button[class*="close"], div[class*="close-btn"]'
+        ];
+        for (const sel of popupSelectors) {
+          const btn = page.locator(sel).first();
+          if (await btn.isVisible({ timeout: 1000 }).catch(() => false)) {
+            await btn.click({ force: true }).catch(() => {});
+            await page.waitForTimeout(800);
+            console.log(`🧹 Closed popup: ${sel}`);
+            break;
+          }
+        }
+      } catch (_) {}
+
+      // ── If we are on the main profile grid, click the most recent post ────
       if (target.isGrid) {
         let postSelector = "";
         if (platform === "instagram") postSelector = "a[href^='/p/'], a[href*='/reel/']";
-        else if (platform === "facebook") postSelector = "div[role='article'] a[href*='/posts/'], div[role='article'] a[href*='/videos/'], a[href*='/posts/'], a[href*='/videos/']";
-        else if (platform === "tiktok") postSelector = "div[data-e2e='user-post-item'] a";
-        else if (platform === "linkedin") postSelector = "div.feed-shared-update-v2"; 
+        else if (platform === "facebook") postSelector = "div[role='article'] a[href*='/posts/'], a[href*='/posts/'], a[href*='/videos/']";
+        else if (platform === "tiktok") postSelector = "div[data-e2e='user-post-item'] a, a[href*='/video/']";
+        else if (platform === "linkedin") postSelector = "div.feed-shared-update-v2 a.app-aware-link, div.occludable-update div[data-id]";
 
         if (postSelector) {
-           const firstPost = page.locator(postSelector).first();
-           if (await firstPost.isVisible()) {
-             await firstPost.click();
-             console.log(`🖱️ Clicked most recent grid post.`);
-             await page.waitForTimeout(4000); // Wait for post modal/page to load
-           } else {
-             console.log(`⚠️ No posts found on grid for ${platform}. Skipping.`);
-             continue; // Skip processing if no posts to click
-           }
+          const firstPost = page.locator(postSelector).first();
+          if (await firstPost.isVisible({ timeout: 5000 }).catch(() => false)) {
+            await firstPost.click();
+            console.log(`🖱️ Clicked most recent grid post.`);
+            await page.waitForTimeout(5000);
+          } else {
+            console.log(`⚠️ No posts found on grid for ${platform}. Skipping.`);
+            continue;
+          }
         }
       }
 
-      // Now we are on a post (either via track URL or clicked from grid)
-      // Scroll slightly to trigger comment loading
-      // @ts-ignore
-      await page.evaluate(() => window.scrollBy(0, 1500));
+      // ── PLATFORM-SPECIFIC: Expand comments section ────────────────────────
 
-      // Close common login popups that obscure the screen
-      try {
-         console.log(`🧹 Attempting to close any login popups...`);
-         const closeBtns = page.locator('button[aria-label="Dismiss"], svg[aria-label="Close"], div[role="button"][aria-label="Close"], button.icon-close');
-         if (await closeBtns.count() > 0) {
-            await closeBtns.first().click({ force: true });
-            await page.waitForTimeout(1000);
-         }
-      } catch (e) {}
-
-      // Try to open comments if they are hidden
-      try {
-         if (platform === "tiktok") {
-            await page.locator('div[data-e2e="comment-icon"]').first().click({ timeout: 2000 });
+      // LinkedIn: click "Comment" button on the post to expand comment list
+      if (platform === "linkedin") {
+        try {
+          const commentBtn = page.locator('button.comment-button, button[aria-label*="comment"], button:has-text("Comment")').first();
+          if (await commentBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await commentBtn.click();
+            console.log("💬 LinkedIn: Clicked Comment button to expand comments.");
+            await page.waitForTimeout(3000);
+          }
+        } catch (_) {}
+        // Also try clicking "Load more comments"
+        try {
+          const loadMore = page.locator('button.comments-comments-list__load-more-comments-button, button:has-text("Load more comments")').first();
+          if (await loadMore.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await loadMore.click();
             await page.waitForTimeout(2000);
-         }
-      } catch (e) {
-         console.log(`Failed to click open comments: ${(e as Error).message}`);
+          }
+        } catch (_) {}
       }
 
-      console.log(`🔄 Scrolling to load comments for 5 seconds...`);
+      // Instagram: click the comment icon/button on a post page if comments aren't visible
+      if (platform === "instagram") {
+        try {
+          const commentIcon = page.locator('svg[aria-label="Comment"], a[href*="/comments/"]').first();
+          if (await commentIcon.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await commentIcon.click();
+            await page.waitForTimeout(2000);
+          }
+        } catch (_) {}
+      }
+
+      // TikTok: click the comments tab
+      if (platform === "tiktok") {
+        try {
+          const commentsTab = page.locator('[data-e2e="comment-icon"], button:has-text("Comments"), div[class*="CommentTab"]').first();
+          if (await commentsTab.isVisible({ timeout: 3000 }).catch(() => false)) {
+            await commentsTab.click();
+            console.log("💬 TikTok: Clicked Comments tab.");
+            await page.waitForTimeout(3000);
+          }
+        } catch (_) {}
+      }
+
+      // ── Scroll to load comments ───────────────────────────────────────────
+      console.log(`🔄 Scrolling to load comments for 6 seconds...`);
       const startTime = Date.now();
-      while (Date.now() - startTime < 5000) {
-         await page.evaluate(() => {
-            window.scrollBy(0, 1000);
-            const scrollable = Array.from(document.querySelectorAll('div')).filter(el => {
-               const style = window.getComputedStyle(el);
-               return (style.overflowY === 'auto' || style.overflowY === 'scroll') && el.scrollHeight > el.clientHeight;
-            });
-            scrollable.forEach(div => div.scrollBy(0, 1000));
-         });
-         await page.waitForTimeout(1000);
+      while (Date.now() - startTime < 6000) {
+        await page.evaluate(() => {
+          window.scrollBy(0, 800);
+          // Also scroll any overflow containers (comment panels)
+          document.querySelectorAll<HTMLElement>('div[class*="comment"], div[class*="Comment"], section').forEach(el => {
+            const style = window.getComputedStyle(el);
+            if ((style.overflowY === "auto" || style.overflowY === "scroll") && el.scrollHeight > el.clientHeight) {
+              el.scrollBy(0, 800);
+            }
+          });
+        });
+        await page.waitForTimeout(1000);
       }
 
+      // ── Extract comments via DOM ──────────────────────────────────────────
       console.log(`🤖 Extracting comments via DOM for ${platform}...`);
       
       let extractedComments: { author: string, text: string }[] = [];
       try {
-         extractedComments = await page.evaluate((plat) => {
-            const comments: { author: string, text: string }[] = [];
-            const docAny = (globalThis as any).document;
+        extractedComments = await page.evaluate((plat) => {
+          const comments: { author: string, text: string }[] = [];
 
-            if (plat === "tiktok") {
-               const commentNodes = docAny.querySelectorAll('div[data-e2e="comment-level-1"], div[class*="DivCommentItemContainer"]');
-               commentNodes.forEach((node: any) => {
-                  const author = node.querySelector('span[class*="SpanUserNameText"], a[class*="StyledUserLinkName"]')?.textContent?.trim() || "Unknown";
-                  const text = node.querySelector('p[data-e2e="comment-level-1-text"], p[class*="PCommentText"]')?.textContent?.trim() || "";
-                  if (text) comments.push({ author, text });
-               });
-            } else if (plat === "instagram") {
-               const commentNodes = docAny.querySelectorAll('ul.x1qjc9v5 li, div.x1n2onr6[role="listitem"], div.x9f619[role="listitem"]');
-               commentNodes.forEach((node: any) => {
-                  const authorNode = node.querySelector('h3, a.x1i10hfl');
-                  const author = authorNode ? authorNode.textContent?.trim() : "Unknown";
-                  const spans = Array.from(node.querySelectorAll('span[dir="auto"]'));
-                  const textNode = spans.find((s: any) => s.textContent !== author && s.textContent !== "Verified");
-                  const text = textNode ? (textNode as any).textContent?.trim() : "";
-                  if (text && author !== "Unknown") comments.push({ author, text });
-               });
-            } else if (plat === "linkedin") {
-               const commentNodes = docAny.querySelectorAll('article.comments-comment-item, article.comments-comments-list__comment-item, .comment__body, .comment');
-               commentNodes.forEach((node: any) => {
-                  const author = node.querySelector('.comments-post-meta__name-text span[aria-hidden="true"], span.comments-post-meta__name-text.hoverable-link-text, .comment__author, span.truncate')?.textContent?.trim() || "Unknown";
-                  const text = node.querySelector('.comments-comment-item__main-content, .update-components-text, .comment__text, p[dir="ltr"]')?.textContent?.trim() || "";
-                  if (text) comments.push({ author, text });
-               });
-            }
-            return comments;
-         }, platform);
-         
-         if (extractedComments.length === 0) {
-            console.log(`⚠️ No comments found, dumping debug files...`);
-            await page.screenshot({ path: `debug_${platform}.png` });
-            const html = await page.content();
-            const fs = await import("fs");
-            fs.writeFileSync(`debug_${platform}.html`, html);
-         }
+          if (plat === "tiktok") {
+            // TikTok comment containers
+            const nodes = document.querySelectorAll(
+              'div[data-e2e="comment-level-1"], ' +
+              'div[class*="CommentItem"], ' +
+              'div[class*="comment-item"]'
+            );
+            nodes.forEach((node: Element) => {
+              const author =
+                (node.querySelector('span[data-e2e="comment-username-1"], a[data-e2e="comment-username-1"], span[class*="UserName"], a[class*="UserName"]') as HTMLElement)?.textContent?.trim() ||
+                "Unknown";
+              const text =
+                (node.querySelector('p[data-e2e="comment-level-1-text"], span[data-e2e="comment-level-1-text"], p[class*="CommentText"], span[class*="CommentText"]') as HTMLElement)?.textContent?.trim() ||
+                "";
+              if (text && author !== "Unknown") comments.push({ author, text });
+            });
 
-         // Deduplicate
-         const uniqueComments = new Map();
-         for (const c of extractedComments) {
-            uniqueComments.set(c.author + "_" + c.text, c);
-         }
-         extractedComments = Array.from(uniqueComments.values());
-         
-         console.log(`✅ DOM Extracted ${extractedComments.length} comments.`);
-         console.log("Raw JSON:", extractedComments);
+          } else if (plat === "instagram") {
+            // Instagram comment list items — try multiple selector patterns
+            const nodes = document.querySelectorAll(
+              'ul li[role="menuitem"], ' +
+              'div[role="listitem"], ' +
+              'li._a9zr, ' +
+              'ul._a9ym li'
+            );
+            nodes.forEach((node: Element) => {
+              // Author: first bold/link element
+              const authorEl = node.querySelector('h3 a, h2 a, a._acan, a[role="link"], span._aap6 a') as HTMLElement;
+              const author = authorEl?.textContent?.trim() || "";
+              // Text: any span with text that isn't the author name
+              const spans = Array.from(node.querySelectorAll('span[dir="auto"], div[dir="auto"], span._aacl')) as HTMLElement[];
+              const textEl = spans.find(s => s.textContent?.trim() !== author && (s.textContent?.trim() || "").length > 0);
+              const text = textEl?.textContent?.trim() || "";
+              if (text && author) comments.push({ author, text });
+            });
+
+          } else if (plat === "linkedin") {
+            // LinkedIn comment articles
+            const nodes = document.querySelectorAll(
+              'article.comments-comment-item, ' +
+              'article[data-id], ' +
+              'li.comments-comment-item'
+            );
+            nodes.forEach((node: Element) => {
+              // Author name
+              const authorEl = node.querySelector(
+                '.comments-post-meta__name-text span[aria-hidden="true"], ' +
+                'span.comments-post-meta__name-text, ' +
+                '.comment__actor-name, ' +
+                'span.feed-shared-actor__name'
+              ) as HTMLElement;
+              const author = authorEl?.textContent?.trim() || "Unknown";
+
+              // Comment text
+              const textEl = node.querySelector(
+                '.comments-comment-item__main-content, ' +
+                'span.comments-comment-item__inline-show-more-text, ' +
+                '.update-components-text span[dir="ltr"], ' +
+                'p[dir="ltr"]'
+              ) as HTMLElement;
+              const text = textEl?.textContent?.trim() || "";
+
+              if (text && author !== "Unknown") comments.push({ author, text });
+            });
+
+          } else if (plat === "facebook") {
+            // Facebook comment divs
+            const nodes = document.querySelectorAll('div[aria-label*="Comment by"], div[data-testid="UFI2Comment/body"]');
+            nodes.forEach((node: Element) => {
+              const authorEl = node.querySelector('a[role="link"], h4 a, h3 a') as HTMLElement;
+              const author = authorEl?.textContent?.trim() || "Unknown";
+              const textEl = node.querySelector('div[dir="auto"] span, div[data-testid="UFI2Comment/message"] span') as HTMLElement;
+              const text = textEl?.textContent?.trim() || "";
+              if (text && author !== "Unknown") comments.push({ author, text });
+            });
+          }
+
+          return comments;
+        }, platform);
+
+        if (extractedComments.length === 0) {
+          console.log(`⚠️ No comments found, dumping debug files...`);
+          await page.screenshot({ path: `debug_${platform}.png` });
+          const html = await page.content();
+          fs.writeFileSync(`debug_${platform}.html`, html);
+        }
+
+        // Deduplicate
+        const uniqueComments = new Map<string, { author: string, text: string }>();
+        for (const c of extractedComments) {
+          uniqueComments.set(c.author + "_" + c.text, c);
+        }
+        extractedComments = Array.from(uniqueComments.values());
+        
+        console.log(`✅ DOM Extracted ${extractedComments.length} comments.`);
+        if (extractedComments.length > 0) {
+          console.log("Raw JSON:", JSON.stringify(extractedComments.slice(0, 5)));
+        }
       } catch (err) {
-         console.error("❌ Failed to extract comments via DOM:", err);
+        console.error("❌ Failed to extract comments via DOM:", err);
       }
 
+      // ── For each comment, match rules and reply ───────────────────────────
       for (const comment of extractedComments) {
         const authorText = comment.author;
         const commentText = comment.text;
@@ -202,10 +319,10 @@ export async function crawlAndReplyComments(
         const commentId = `${authorText.trim()}_${commentText.trim().substring(0, 20)}`;
         allParsedComments.push({ id: commentId, author: authorText.trim(), text: commentText.trim() });
         
-        console.log(`  [AI Comment Found] ${authorText.trim()}: ${commentText.trim()}`);
+        console.log(`  [Comment] ${authorText.trim()}: ${commentText.trim()}`);
         
-        // Determine if we should reply
-        let replyToUse = null;
+        // Determine which rule to apply
+        let replyToUse: string | null = null;
         for (const rule of commentRules) {
           if (rule.triggerKeyword !== "*") {
             const keywords = rule.triggerKeyword.split(",").map((k: string) => k.trim().toLowerCase()).filter((k: string) => k.length > 0);
@@ -216,71 +333,121 @@ export async function crawlAndReplyComments(
             }
           }
         }
+        // Fallback wildcard rule
         if (!replyToUse) {
-          const fallbackRule = commentRules.find(r => r.triggerKeyword === "*");
+          const fallbackRule = commentRules.find((r: any) => r.triggerKeyword === "*");
           if (fallbackRule) replyToUse = fallbackRule.replyText;
         }
 
-        // Auto-Reply action using visual/text locators
-        if (replyToUse) {
-          console.log(`  🔍 Locating comment by ${authorText} in DOM to reply...`);
-          let replied = false;
-          try {
-             // Find a container that holds both the author's name and a reply button
-             // We start by looking for standard comment wrappers, and filter by the author's name
-             const commentWrappers = page.locator('article, .comment, .comments-comment-item, [data-testid="comment"], .feed-shared-comment');
-             const specificComment = commentWrappers.filter({ hasText: authorText.trim() }).last();
-             
-             if (await specificComment.isVisible().catch(() => false)) {
-                 const replyBtn = specificComment.locator('button:has-text("Reply"), span:has-text("Reply"), div:has-text("Reply")').locator('visible=true').first();
-                 if (await replyBtn.isVisible().catch(() => false)) {
-                     await replyBtn.click();
-                     replied = true;
-                 }
-             }
-             
-             // Fallback if the wrapper wasn't found
-             if (!replied) {
-                 const genericReplyBtn = page.locator(`text="${authorText.trim()}"`).locator('xpath=ancestor::*[contains(@class, "comment") or name()="article"][1]').locator('button:has-text("Reply"), span:has-text("Reply")').first();
-                 if (await genericReplyBtn.isVisible().catch(() => false)) {
-                     await genericReplyBtn.click();
-                     replied = true;
-                 }
-             }
+        if (!replyToUse) {
+          console.log(`  ⏭️ No rule matched for comment by ${authorText.trim()}. Skipping reply.`);
+          continue;
+        }
 
-             if (replied) {
-                 await page.waitForTimeout(1500); // wait for box to open
-                 const inputBox = page.locator('div[contenteditable="true"], .ql-editor, textarea, input[type="text"]').last();
-                 if (await inputBox.isVisible().catch(() => false)) {
-                     await inputBox.focus();
-                 }
-             }
-          } catch (e) {
-             console.log(`  ⚠️ Error clicking reply: ${e}`);
+        // ── Click Reply button for this comment ────────────────────────────
+        console.log(`  🔍 Locating reply button for comment by ${authorText}...`);
+        let replied = false;
+        try {
+          // Strategy 1: find comment wrapper containing author text, then find Reply button inside
+          const commentWrappers = page.locator(
+            'article.comments-comment-item, article[data-id], li.comments-comment-item, ' +
+            'div[data-e2e="comment-level-1"], div[class*="CommentItem"], ' +
+            'li._a9zr, div[role="listitem"], li[role="menuitem"]'
+          );
+          const count = await commentWrappers.count();
+          for (let i = 0; i < Math.min(count, 30); i++) {
+            const wrapper = commentWrappers.nth(i);
+            const wrapperText = await wrapper.textContent().catch(() => "");
+            if (wrapperText && wrapperText.includes(authorText.trim())) {
+              // Found the comment wrapper — look for Reply button inside
+              const replyBtn = wrapper.locator(
+                'button:has-text("Reply"), span:has-text("Reply"), a:has-text("Reply"), ' +
+                'div[data-e2e="comment-reply-1"], button[data-e2e="comment-reply"]'
+              ).first();
+              if (await replyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                await replyBtn.scrollIntoViewIfNeeded();
+                await replyBtn.click();
+                replied = true;
+                console.log(`  ✅ Clicked Reply inside comment wrapper.`);
+                break;
+              }
+              // If no reply button visible, hover to make it appear
+              await wrapper.hover().catch(() => {});
+              await page.waitForTimeout(500);
+              if (await replyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                await replyBtn.click();
+                replied = true;
+                console.log(`  ✅ Clicked Reply after hover.`);
+                break;
+              }
+            }
+          }
+        } catch (e) {
+          console.log(`  ⚠️ Error clicking reply: ${e}`);
+        }
+
+        if (!replied) {
+          console.log(`  ⚠️ Could not click reply button for ${authorText.trim()}.`);
+          continue;
+        }
+
+        // ── Wait for reply input box and type ─────────────────────────────
+        await page.waitForTimeout(1500);
+        try {
+          // Find the newly focused/active reply input
+          const inputSelectors = [
+            'div[contenteditable="true"].ql-editor',
+            'div[contenteditable="true"][data-placeholder*="reply" i]',
+            'div[contenteditable="true"][data-placeholder*="Reply" i]',
+            'div[contenteditable="true"]',
+            'textarea[placeholder*="reply" i]',
+            'textarea',
+          ];
+          let inputBox = null;
+          for (const sel of inputSelectors) {
+            const el = page.locator(sel).last();
+            if (await el.isVisible({ timeout: 1500 }).catch(() => false)) {
+              inputBox = el;
+              break;
+            }
           }
 
-          if (replied) {
-            await page.waitForTimeout(1000);
+          if (inputBox) {
+            await inputBox.click();
+            await page.waitForTimeout(500);
             await page.keyboard.insertText(replyToUse);
             await page.waitForTimeout(1000);
-            
-            await page.screenshot({ path: `debug_reply_${authorText.replace(/[^a-zA-Z0-9]/g, '')}.png` });
-            
-            const postBtn = page.locator('button.comments-comment-box__submit-button, button.artdeco-button--primary:has-text("Post"), button:has-text("Reply")').last();
-            if (await postBtn.isVisible().catch(() => false)) {
-              await postBtn.click({ force: true }).catch(() => {});
+            console.log(`  📝 Typed reply into input box.`);
+
+            // Screenshot before posting (for debugging)
+            await page.screenshot({ path: `debug_reply_${authorText.replace(/[^a-zA-Z0-9]/g, "")}.png` });
+
+            // Click Post/Submit button or press Enter
+            const postBtn = page.locator(
+              'button.comments-comment-box__submit-button, ' +
+              'button[data-control-name="comment.reply_create"], ' +
+              'button.artdeco-button--primary:has-text("Post"), ' +
+              'button:has-text("Post"), ' +
+              'button[type="submit"]'
+            ).last();
+            if (await postBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+              await postBtn.click({ force: true });
+              console.log(`  ✉️ Clicked Post button.`);
             } else {
-               await page.keyboard.press("Enter");
+              await page.keyboard.press("Enter");
+              console.log(`  ✉️ Pressed Enter to post reply.`);
             }
-            console.log(`  ✉️ Automated Rule-based reply posted to ${authorText.trim()}`);
+            console.log(`  ✅ Reply posted to ${authorText.trim()}`);
             await page.waitForTimeout(2000);
           } else {
-            console.log(`  ⚠️ Could not click reply button for ${authorText.trim()}. (Note: If testing on a signed-out profile, you cannot reply)`);
+            console.log(`  ⚠️ Could not find reply input box after clicking Reply.`);
           }
+        } catch (e) {
+          console.log(`  ⚠️ Error typing/posting reply: ${e}`);
         }
       }
 
-      // Close modal if on grid
+      // Close modal if opened from grid
       if (target.isGrid) {
         await page.keyboard.press("Escape");
         await page.waitForTimeout(1000);
