@@ -26,6 +26,8 @@ export async function uploadRoutes(fastify: FastifyInstance) {
         fs.mkdirSync(uploadsDir, { recursive: true });
       }
 
+      console.log(`📤 Starting file upload stream for: ${data.filename}`);
+
       // Generate a collision-free UUID filename and preserve extension
       const fileExt = path.extname(data.filename).toLowerCase();
       const uniqueFilename = `${crypto.randomUUID()}${fileExt}`;
@@ -35,11 +37,35 @@ export async function uploadRoutes(fastify: FastifyInstance) {
       const writeStream = fs.createWriteStream(finalDestPath);
       
       await new Promise<void>((resolve, reject) => {
+        let limitTriggered = false;
+
         data.file.pipe(writeStream);
-        data.file.on("end", resolve);
+        
+        data.file.on("end", () => {
+          if (!limitTriggered) resolve();
+        });
+        
+        data.file.on("limit", () => {
+          limitTriggered = true;
+          writeStream.destroy();
+          fs.unlink(finalDestPath, () => {});
+          reject(new Error("File size limit exceeded (Max 100MB)."));
+        });
+
         data.file.on("error", (err) => {
           writeStream.destroy();
+          fs.unlink(finalDestPath, () => {});
           reject(err);
+        });
+
+        data.file.on("close", () => {
+          setTimeout(() => {
+            if (!limitTriggered && !writeStream.writableEnded) {
+              writeStream.destroy();
+              fs.unlink(finalDestPath, () => {});
+              reject(new Error("Upload stream closed prematurely."));
+            }
+          }, 500);
         });
       });
 
@@ -48,9 +74,9 @@ export async function uploadRoutes(fastify: FastifyInstance) {
       console.log(`📥 Upload Success! Saved file from client to: ${finalDestPath}`);
 
       return reply.send({ filePath: relativePath });
-    } catch (error) {
+    } catch (error: any) {
       fastify.log.error(error);
-      return reply.status(500).send({ error: "File upload stream failed on the server." });
+      return reply.status(500).send({ error: error.message || "File upload stream failed on the server." });
     }
   });
 }
