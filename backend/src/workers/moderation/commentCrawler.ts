@@ -450,20 +450,20 @@ export async function crawlAndReplyComments(
                 'span:has-text("Reply"), a:has-text("Reply"), ' +
                 'div[data-e2e="comment-reply-1"], button[data-e2e="comment-reply"]'
               ).first();
+              
               if (await replyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
                 await replyBtn.scrollIntoViewIfNeeded();
-                await replyBtn.click();
+                await replyBtn.click().catch(async () => {
+                  await replyBtn.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+                });
                 replied = true;
                 console.log(`  ✅ Clicked Reply inside comment wrapper.`);
                 break;
-              }
-              // If no reply button visible, hover to make it appear
-              await wrapper.hover().catch(() => {});
-              await page.waitForTimeout(500);
-              if (await replyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-                await replyBtn.click();
+              } else {
+                // Fallback: Click via JS if hidden in DOM
+                await replyBtn.evaluate((el: HTMLElement) => el.click()).catch(() => {});
                 replied = true;
-                console.log(`  ✅ Clicked Reply after hover.`);
+                console.log(`  ✅ Clicked Reply inside comment wrapper via JS.`);
                 break;
               }
             }
@@ -497,10 +497,33 @@ export async function crawlAndReplyComments(
             }
           }
 
+          // Fallback to check if it's in the DOM but not visible
+          if (!inputBox) {
+            for (const sel of inputSelectors) {
+              const el = page.locator(sel).last();
+              if (await el.count() > 0) {
+                inputBox = el;
+                break;
+              }
+            }
+          }
+
           if (inputBox) {
-            await inputBox.click();
+            await inputBox.click().catch(() => {});
             await page.waitForTimeout(500);
-            await page.keyboard.insertText(replyToUse);
+            
+            // Type or inject the text directly into the text editor
+            await page.keyboard.insertText(replyToUse).catch(async () => {
+              await inputBox.evaluate((el: any, val) => {
+                if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+                  el.value = val;
+                } else {
+                  el.textContent = val;
+                }
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+              }, replyToUse);
+            });
             await page.waitForTimeout(1000);
             console.log(`  📝 Typed reply into input box.`);
 
@@ -519,10 +542,22 @@ export async function crawlAndReplyComments(
                 ).first();
                 if (await submitBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
                   await submitBtn.click().catch(async () => {
-                    await submitBtn.click({ force: true }).catch(() => {});
+                    await submitBtn.evaluate((el: HTMLElement) => el.click()).catch(() => {});
                   });
                   console.log(`  ✉️ Clicked Submit/Reply button inside local container.`);
                   posted = true;
+                } else {
+                  // Fallback: Click via JS if hidden
+                  const submitBtnHidden = boxContainer.locator(
+                    'button:has-text("Reply"), button:has-text("Post"), ' +
+                    '[role="button"]:has-text("Reply"), [role="button"]:has-text("Post"), ' +
+                    'button[type="submit"], button[class*="submit"]'
+                  ).first();
+                  if (await submitBtnHidden.count() > 0) {
+                    await submitBtnHidden.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+                    console.log(`  ✉️ Clicked Submit/Reply button inside local container via JS.`);
+                    posted = true;
+                  }
                 }
               }
             } catch (e) {
@@ -543,7 +578,7 @@ export async function crawlAndReplyComments(
               ).last();
               if (await postBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
                 await postBtn.click().catch(async () => {
-                  await postBtn.click({ force: true }).catch(() => {});
+                  await postBtn.evaluate((el: HTMLElement) => el.click()).catch(() => {});
                 });
                 console.log(`  ✉️ Clicked fallback Post/Reply button.`);
               } else {
@@ -560,7 +595,7 @@ export async function crawlAndReplyComments(
               const textVal = await inputBox.innerText().catch(() => "");
               if (textVal.trim().length > 0) {
                 console.log(`  ⚠️ Input box still contains text after click. Pressing Control+Enter to force submit...`);
-                await inputBox.click();
+                await inputBox.click().catch(() => {});
                 await page.keyboard.press("Control+Enter");
                 await page.waitForTimeout(2000);
               }
