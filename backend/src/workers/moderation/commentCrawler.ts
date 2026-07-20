@@ -422,7 +422,7 @@ export async function crawlAndReplyComments(
         try {
           // Strategy 1: find comment wrapper containing author text, then find Reply button inside
           const commentWrappers = page.locator(
-            'article.comments-comment-entity, article[data-id], li.comments-comment-item, ' +
+            'article.comments-comment-entity, article.comments-comment-item, article[data-id], li.comments-comment-item, ' +
             'div[data-e2e="comment-level-1"], div[class*="CommentItem"], ' +
             'li._a9zr, div[role="listitem"], li[role="menuitem"]'
           );
@@ -464,18 +464,19 @@ export async function crawlAndReplyComments(
         }
 
         // ── Wait for reply input box and type ─────────────────────────────
-        await page.waitForTimeout(1500);
         try {
-          // Find the newly focused/active reply input
+          // Find the newly focused/active reply input by waiting for it dynamically
           const inputSelectors = [
-            'div[contenteditable="true"].ql-editor, div[contenteditable="true"]',
+            'div[contenteditable="true"].ql-editor',
+            'div[contenteditable="true"]',
             'textarea[placeholder*="reply" i]',
             'textarea',
           ];
           let inputBox = null;
           for (const sel of inputSelectors) {
             const el = page.locator(sel).last();
-            if (await el.isVisible({ timeout: 1500 }).catch(() => false)) {
+            const isVis = await el.waitFor({ state: "visible", timeout: 4000 }).then(() => true).catch(() => false);
+            if (isVis) {
               inputBox = el;
               break;
             }
@@ -496,7 +497,7 @@ export async function crawlAndReplyComments(
             try {
               const boxContainer = inputBox.locator('xpath=ancestor::form | ancestor::div[contains(@class, "comment")]').first();
               if (await boxContainer.count() > 0) {
-                const submitBtn = boxContainer.locator('button:has-text("Reply"), button:has-text("Post"), button[type="submit"], button[class*="submit"]').locator('visible=true').first();
+                const submitBtn = boxContainer.locator('button:has-text("Reply"), button:has-text("Post"), button[type="submit"], button[class*="submit"] >> visible=true').first();
                 if (await submitBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
                   await submitBtn.click({ force: true });
                   console.log(`  ✉️ Clicked Submit/Reply button inside local container.`);
