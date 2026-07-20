@@ -116,8 +116,22 @@ export async function crawlAndReplyComments(
         }
       } catch (_) {}
 
+      // ── Detect Redirects (e.g. invalid post URL fell back to profile grid) ──
+      const currentUrl = page.url();
+      let isActuallyGrid = target.isGrid;
+      if (!target.isGrid) {
+        const isInstagramRedirect = platform === "instagram" && !currentUrl.includes("/p/") && !currentUrl.includes("/reel/");
+        const isTikTokRedirect = platform === "tiktok" && !currentUrl.includes("/video/");
+        const isLinkedInRedirect = platform === "linkedin" && !currentUrl.includes("/feed/update/") && !currentUrl.includes("/posts/");
+
+        if (isInstagramRedirect || isTikTokRedirect || isLinkedInRedirect) {
+          console.log(`⚠️ Redirected from post URL to grid page: ${currentUrl}. Falling back to grid post click.`);
+          isActuallyGrid = true;
+        }
+      }
+
       // ── If we are on the main profile grid, click the most recent post ────
-      if (target.isGrid) {
+      if (isActuallyGrid) {
         let postSelector = "";
         if (platform === "instagram") postSelector = "a[href^='/p/'], a[href*='/reel/']";
         else if (platform === "facebook") postSelector = "div[role='article'] a[href*='/posts/'], a[href*='/posts/'], a[href*='/videos/']";
@@ -131,7 +145,8 @@ export async function crawlAndReplyComments(
             console.log(`🖱️ Clicked most recent grid post.`);
             await page.waitForTimeout(5000);
           } else {
-            console.log(`⚠️ No posts found on grid for ${platform}. Skipping.`);
+            console.log(`⚠️ No posts found on grid for ${platform}. Skipping. Dumping debug screen.`);
+            await page.screenshot({ path: `debug_grid_fail_${platform}.png` });
             continue;
           }
         }
