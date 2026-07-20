@@ -663,16 +663,52 @@ export async function crawlAndReplyComments(
             }
 
             // Wait 2s to check if the input box cleared or disappeared.
-            // If it is still visible and has text, force submit using Control+Enter keypress.
+            // If it is still visible and has text, force submit using multiple strategies.
             await page.waitForTimeout(2000);
             const isStillVisible = await inputBox.isVisible().catch(() => false);
             if (isStillVisible) {
               const textVal = await inputBox.innerText().catch(() => "");
               if (textVal.trim().length > 0) {
-                console.log(`  ⚠️ Input box still contains text after click. Pressing Control+Enter to force submit...`);
-                await inputBox.click().catch(() => {});
-                await page.keyboard.press("Control+Enter");
-                await page.waitForTimeout(2000);
+                console.log(`  ⚠️ Input box still contains text. Trying force submit strategies...`);
+                
+                // Strategy 1: JS Click on submit button
+                try {
+                  const boxContainer = inputBox.locator('xpath=ancestor::form | ancestor::div[contains(@class, "comment")]').first();
+                  const submitBtn = boxContainer.locator(
+                    'button:has-text("Reply"), button:has-text("Post"), ' +
+                    '[role="button"]:has-text("Reply"), [role="button"]:has-text("Post"), ' +
+                    'button[type="submit"], button[class*="submit"]'
+                  ).first();
+                  if (await submitBtn.count() > 0) {
+                    console.log(`    👉 Attempting JS click on submit button...`);
+                    await submitBtn.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+                    await page.waitForTimeout(2000);
+                  }
+                } catch (_) {}
+
+                // Strategy 2: Form submit event dispatch
+                const stillVisible2 = await inputBox.isVisible().catch(() => false);
+                if (stillVisible2) {
+                  try {
+                    const form = inputBox.locator('xpath=ancestor::form').first();
+                    if (await form.count() > 0) {
+                      console.log(`    👉 Attempting Form submit event dispatch...`);
+                      await form.evaluate((el: any) => {
+                        el.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                      }).catch(() => {});
+                      await page.waitForTimeout(2000);
+                    }
+                  } catch (_) {}
+                }
+
+                // Strategy 3: Keyboard Control+Enter
+                const stillVisible3 = await inputBox.isVisible().catch(() => false);
+                if (stillVisible3) {
+                  console.log(`    👉 Attempting keyboard Control+Enter...`);
+                  await inputBox.click().catch(() => {});
+                  await page.keyboard.press("Control+Enter");
+                  await page.waitForTimeout(2000);
+                }
               }
             }
 
