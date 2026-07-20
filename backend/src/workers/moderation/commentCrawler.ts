@@ -116,9 +116,16 @@ export async function crawlAndReplyComments(
         }
       } catch (_) {}
 
-      // ── Detect Redirects (e.g. invalid post URL fell back to profile grid) ──
+      // ── Detect Redirects or Grid landing ─────────────────────────────────
       const currentUrl = page.url();
       let isActuallyGrid = target.isGrid;
+      let postId = "";
+      
+      const matches = target.url.match(/\/(p|reel|video|posts)\/([a-zA-Z0-9_-]+)/);
+      if (matches && matches[2]) {
+        postId = matches[2];
+      }
+
       if (!target.isGrid) {
         const isInstagramRedirect = platform === "instagram" && !currentUrl.includes("/p/") && !currentUrl.includes("/reel/");
         const isTikTokRedirect = platform === "tiktok" && !currentUrl.includes("/video/");
@@ -130,16 +137,33 @@ export async function crawlAndReplyComments(
         }
       }
 
+      // ── Fallback: If we have a postId and we are on a grid/profile page, click the specific post link ──
+      if (postId) {
+        try {
+          const postLink = page.locator(`a[href*="${postId}"]`).first();
+          if (await postLink.isVisible({ timeout: 3000 }).catch(() => false)) {
+            console.log(`🖱️ Found specific post link for ID ${postId} on page. Clicking it...`);
+            await postLink.click();
+            await page.waitForTimeout(5000);
+            isActuallyGrid = false; // We successfully navigated to the post modal/view
+          }
+        } catch (_) {}
+      }
+
       // ── If we are on the main profile grid, click the most recent post ────
       if (isActuallyGrid) {
+        console.log(`Grid page detected. Scrolling to load grid posts...`);
+        await page.evaluate(() => window.scrollBy(0, 1000));
+        await page.waitForTimeout(3000);
+
         let postSelector = "";
         if (platform === "instagram") postSelector = "a[href^='/p/'], a[href*='/reel/']";
-        else if (platform === "facebook") postSelector = "div[role='article'] a[href*='/posts/'], a[href*='/posts/'], a[href*='/videos/']";
+        else if (platform === "facebook") postSelector = "div[role='article'] a[href*='/posts/'], a[href*='/posts/'], a[href*='/videos/'], a[href*='/photos/'], div[data-ad-preview='message'] a";
         else if (platform === "tiktok") postSelector = "div[data-e2e='user-post-item'] a, a[href*='/video/']";
         else if (platform === "linkedin") postSelector = "div.feed-shared-update-v2, main div[data-urn], div.occludable-update";
 
         if (postSelector) {
-          const firstPost = page.locator(postSelector).first();
+          const firstPost = page.locator(`${postSelector} >> visible=true`).first();
           if (await firstPost.isVisible({ timeout: 5000 }).catch(() => false)) {
             await firstPost.click();
             console.log(`🖱️ Clicked most recent grid post.`);
@@ -150,6 +174,42 @@ export async function crawlAndReplyComments(
             continue;
           }
         }
+      }
+
+      // Now we are on a post (either via track URL or clicked from grid)
+      // Scroll slightly to trigger comment loading
+      // @ts-ignore
+      await page.evaluate(() => window.scrollBy(0, 1500));
+
+      // Close common login popups that obscure the screen
+      try {
+         console.log(`🧹 Attempting to close any login popups...`);
+         const closeBtns = page.locator('button[aria-label="Dismiss"], svg[aria-label="Close"], div[role="button"][aria-label="Close"], button.icon-close');
+         if (await closeBtns.count() > 0) {
+            await closeBtns.first().click({ force: true });
+            await page.waitForTimeout(1000);
+         }
+      } catch (e) {}
+
+      // Try to open comments if they are hidden
+      try {
+         if (platform === "tiktok") {
+            const commentsTab = page.locator('div[role="tab"]:has-text("Comments"), span:has-text("Comments"), button:has-text("Comments"), [data-e2e="comments"], [data-e2e="comment-icon"] >> visible=true').first();
+            if (await commentsTab.isVisible({ timeout: 4000 }).catch(() => false)) {
+               await commentsTab.click();
+               console.log("💬 TikTok: Clicked Comments tab.");
+               await page.waitForTimeout(3000);
+            } else {
+               const textTab = page.locator('text="Comments" >> visible=true').first();
+               if (await textTab.isVisible({ timeout: 2000 }).catch(() => false)) {
+                  await textTab.click();
+                  console.log("💬 TikTok: Clicked Comments tab via text selector.");
+                  await page.waitForTimeout(3000);
+               }
+            }
+         }
+      } catch (e) {
+         console.log(`Failed to click open comments: ${(e as Error).message}`);
       }
 
       // ── PLATFORM-SPECIFIC: Expand comments section ────────────────────────
@@ -362,7 +422,7 @@ export async function crawlAndReplyComments(
         try {
           // Strategy 1: find comment wrapper containing author text, then find Reply button inside
           const commentWrappers = page.locator(
-            'article.comments-comment-item, article[data-id], li.comments-comment-item, ' +
+            'article.comments-comment-entity, article[data-id], li.comments-comment-item, ' +
             'div[data-e2e="comment-level-1"], div[class*="CommentItem"], ' +
             'li._a9zr, div[role="listitem"], li[role="menuitem"]'
           );
@@ -408,10 +468,7 @@ export async function crawlAndReplyComments(
         try {
           // Find the newly focused/active reply input
           const inputSelectors = [
-            'div[contenteditable="true"].ql-editor',
-            'div[contenteditable="true"][data-placeholder*="reply" i]',
-            'div[contenteditable="true"][data-placeholder*="Reply" i]',
-            'div[contenteditable="true"]',
+            'div[contenteditable="true"].ql-editor, div[contenteditable="true"]',
             'textarea[placeholder*="reply" i]',
             'textarea',
           ];
@@ -434,20 +491,39 @@ export async function crawlAndReplyComments(
             // Screenshot before posting (for debugging)
             await page.screenshot({ path: `debug_reply_${authorText.replace(/[^a-zA-Z0-9]/g, "")}.png` });
 
-            // Click Post/Submit button or press Enter
-            const postBtn = page.locator(
-              'button.comments-comment-box__submit-button, ' +
-              'button[data-control-name="comment.reply_create"], ' +
-              'button.artdeco-button--primary:has-text("Post"), ' +
-              'button:has-text("Post"), ' +
-              'button[type="submit"]'
-            ).last();
-            if (await postBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
-              await postBtn.click({ force: true });
-              console.log(`  ✉️ Clicked Post button.`);
-            } else {
-              await page.keyboard.press("Enter");
-              console.log(`  ✉️ Pressed Enter to post reply.`);
+            // Locate the form or box container of this specific input box to target its submit button
+            let posted = false;
+            try {
+              const boxContainer = inputBox.locator('xpath=ancestor::form | ancestor::div[contains(@class, "comment")]').first();
+              if (await boxContainer.count() > 0) {
+                const submitBtn = boxContainer.locator('button:has-text("Reply"), button:has-text("Post"), button[type="submit"], button[class*="submit"]').locator('visible=true').first();
+                if (await submitBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                  await submitBtn.click({ force: true });
+                  console.log(`  ✉️ Clicked Submit/Reply button inside local container.`);
+                  posted = true;
+                }
+              }
+            } catch (e) {
+              console.log(`  ⚠️ Error finding container submit button: ${e}`);
+            }
+
+            if (!posted) {
+              // Global fallback button search
+              const postBtn = page.locator(
+                'button.comments-comment-box__submit-button, ' +
+                'button[data-control-name="comment.reply_create"], ' +
+                'button:has-text("Reply"), ' +
+                'button.artdeco-button--primary:has-text("Post"), ' +
+                'button:has-text("Post"), ' +
+                'button[type="submit"] >> visible=true'
+              ).last();
+              if (await postBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                await postBtn.click({ force: true });
+                console.log(`  ✉️ Clicked fallback Post/Reply button.`);
+              } else {
+                await page.keyboard.press("Enter");
+                console.log(`  ✉️ Pressed Enter to post reply.`);
+              }
             }
             console.log(`  ✅ Reply posted to ${authorText.trim()}`);
             await page.waitForTimeout(2000);
