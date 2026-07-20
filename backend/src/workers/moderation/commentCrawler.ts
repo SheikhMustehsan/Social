@@ -1,7 +1,7 @@
 import { launchBrowserWithProfile } from "../utils/browserLauncher.js";
 import fs from "fs";
 import { db } from "../../db/db.js";
-import { moderationRules } from "../../db/schema.js";
+import { moderationRules, socialProfiles } from "../../db/schema.js";
 import { eq, and, or, isNull } from "drizzle-orm";
 
 interface Comment {
@@ -21,6 +21,16 @@ export async function crawlAndReplyComments(
 ): Promise<Comment[]> {
   process.env.DISPLAY = ":99";
   
+  let profileName = "";
+  try {
+    const profiles = await db.select().from(socialProfiles).where(eq(socialProfiles.id, socialProfileId));
+    if (profiles.length > 0) {
+      profileName = profiles[0].profileName;
+    }
+  } catch (e) {
+    console.warn("Failed to fetch social profile for name lookup:", e);
+  }
+
   let rules: any[] = [];
   try {
     rules = await db.select()
@@ -188,10 +198,71 @@ export async function crawlAndReplyComments(
          console.log(`🧹 Attempting to close any login popups...`);
          const closeBtns = page.locator('button[aria-label="Dismiss"], svg[aria-label="Close"], div[role="button"][aria-label="Close"], button.icon-close');
          if (await closeBtns.count() > 0) {
-            await closeBtns.first().click({ force: true });
-            await page.waitForTimeout(1000);
+             await closeBtns.first().click({ force: true });
+             await page.waitForTimeout(1000);
+          }
+       } catch (e) {}
+
+       // ── LinkedIn Profile Switcher (Comment as Page instead of Personal Profile) ──
+       if (platform === "linkedin") {
+         try {
+           const actorSwitcher = page.locator(
+             'button.comments-comment-box__comment-as-button, ' +
+             'button.comments-comment-box-comment-as-button, ' +
+             'button[class*="actor-select"], ' +
+             'button[aria-label*="Comment as"], ' +
+             'button[aria-label*="commenting as"] >> visible=true'
+           ).first();
+
+           if (await actorSwitcher.isVisible({ timeout: 3000 }).catch(() => false)) {
+             console.log(`  👤 LinkedIn: Found Comment As switcher. Switching to company page...`);
+             await actorSwitcher.click();
+             await page.waitForTimeout(1500);
+
+             // Look for Company Page name in actor list (case-insensitive)
+             // profile.profileName has the company profile name (e.g. "Dcc Developers" or "Eight Square Developers")
+             const targetName = profileName || "Developers";
+             console.log(`  🔍 Searching for actor profile named "${targetName}" in selection list...`);
+
+             // Find selection option/row containing target company name
+             const option = page.locator(
+               'div[role="dialog"] [role="radio"], ' +
+               'div[role="dialog"] li, ' +
+               'div[role="dialog"] button, ' +
+               'div[role="dialog"] [role="option"]'
+             ).filter({ hasText: new RegExp(targetName, 'i') }).first();
+
+             if (await option.count() > 0) {
+               await option.click();
+               console.log(`  ✅ Selected actor profile: ${targetName}`);
+               await page.waitForTimeout(1000);
+
+               // Click Save button
+               const saveBtn = page.locator(
+                 'div[role="dialog"] button:has-text("Save"), ' +
+                 'div[role="dialog"] button:has-text("Done"), ' +
+                 'div[role="dialog"] button:has-text("Update") >> visible=true'
+               ).first();
+               if (await saveBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+                 await saveBtn.click();
+                 console.log(`  💾 Saved actor selection.`);
+                 await page.waitForTimeout(2000);
+               }
+             } else {
+               console.log(`  ⚠️ Could not find actor profile named "${targetName}" in selection list. Closing modal...`);
+               // Click close or overlay to close modal
+               const closeBtn = page.locator('div[role="dialog"] button[aria-label*="Close"], div[role="dialog"] button[aria-label*="Dismiss"] >> visible=true').first();
+               if (await closeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                 await closeBtn.click();
+               } else {
+                 await page.keyboard.press("Escape");
+               }
+             }
+           }
+         } catch (e) {
+            console.log(`  ⚠️ Error switching LinkedIn commenter profile: ${e}`);
          }
-      } catch (e) {}
+       }
 
       // Try to open comments if they are hidden
       try {
