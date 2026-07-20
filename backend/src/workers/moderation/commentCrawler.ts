@@ -547,26 +547,28 @@ export async function crawlAndReplyComments(
                 });
                 console.log(`  ✉️ Clicked fallback Post/Reply button.`);
               } else {
-                await page.keyboard.press("Enter");
-                console.log(`  ✉️ Pressed Enter to post reply.`);
+                await page.keyboard.press("Control+Enter");
+                console.log(`  ✉️ Pressed Control+Enter to post reply.`);
               }
             }
 
             // Wait 2s to check if the input box cleared or disappeared.
-            // If it is still visible and has text, force submit using Enter keypress.
+            // If it is still visible and has text, force submit using Control+Enter keypress.
             await page.waitForTimeout(2000);
             const isStillVisible = await inputBox.isVisible().catch(() => false);
             if (isStillVisible) {
               const textVal = await inputBox.innerText().catch(() => "");
               if (textVal.trim().length > 0) {
-                console.log(`  ⚠️ Input box still contains text after click. Pressing Enter to force submit...`);
+                console.log(`  ⚠️ Input box still contains text after click. Pressing Control+Enter to force submit...`);
                 await inputBox.click();
-                await page.keyboard.press("Enter");
+                await page.keyboard.press("Control+Enter");
                 await page.waitForTimeout(2000);
               }
             }
 
             console.log(`  ✅ Reply posted to ${authorText.trim()}`);
+            // Take screenshot after posting to verify success
+            await page.screenshot({ path: `debug_post_reply_${platform}_${authorText.replace(/[^a-zA-Z0-9]/g, "")}.png` });
             await page.waitForTimeout(2000);
           } else {
             console.log(`  ⚠️ Could not find reply input box after clicking Reply.`);
