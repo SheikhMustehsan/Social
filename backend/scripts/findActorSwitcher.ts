@@ -6,14 +6,24 @@ if (fs.existsSync(htmlPath)) {
   const html = fs.readFileSync(htmlPath, 'utf8');
   console.log("File loaded. Length:", html.length);
   
-  // Regex to find buttons with class or aria-label containing "actor", "switcher", "select", "commenting"
-  const regex = /<button[^>]+(class|aria-label|id)="[^"]*(actor|switcher|select|commenting)[^"]*"[^>]*>([\s\S]*?)<\/button>/gi;
-  let match;
-  let count = 0;
-  while ((match = regex.exec(html)) !== null) {
-    count++;
-    console.log(`\n--- Button #${count} ---`);
-    console.log("HTML:", match[0].substring(0, 300));
+  // Find any text containing "Comment as" or "commenting"
+  const regexText = /[^<]{0,100}(Comment as|commenting|actor|switcher)[^<]{0,100}/gi;
+  let tMatch;
+  let tCount = 0;
+  console.log("Searching text matches:");
+  while ((tMatch = regexText.exec(html)) !== null && tCount < 20) {
+    tCount++;
+    console.log(`Match ${tCount}:`, tMatch[0].trim());
+  }
+
+  // Find any class containing "actor", "select", "switcher"
+  console.log("\nSearching class matches:");
+  const classRegex = /class="([^"]*(actor|select|switcher)[^"]*)"/gi;
+  let cMatch;
+  let cCount = 0;
+  while ((cMatch = classRegex.exec(html)) !== null && cCount < 20) {
+    cCount++;
+    console.log(`Class Match ${cCount}:`, cMatch[1]);
   }
 } else {
   console.log("debug_linkedin.html not found.");
