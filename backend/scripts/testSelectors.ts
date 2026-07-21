@@ -16,7 +16,6 @@ async function main() {
 
   console.log("HTML loaded in Playwright page.");
 
-  // Test both comment-commentary and comment-reply-commentary
   const commentNodes = page.locator('[componentkey^="comment-commentary_"], [componentkey^="comment-reply-commentary_"]');
   const count = await commentNodes.count();
   console.log(`Found ${count} comment elements.`);
@@ -28,8 +27,8 @@ async function main() {
     const details = await node.evaluate((el) => {
       let parent = el.parentElement;
       let level = 0;
-      let wrapper = null;
       let authorName = "Unknown";
+      let replyBtnSelector = "None";
       
       while (parent && level < 15) {
         const optionsBtn = parent.querySelector('button[aria-label*="View more options for"]');
@@ -39,7 +38,12 @@ async function main() {
           if (match && match[1]) {
             authorName = match[1];
           }
-          wrapper = parent.tagName + (parent.className ? '.' + parent.className.split(' ').join('.') : '');
+          
+          // Let's find any button that looks like a Reply button in this comment container
+          const replyBtn = parent.querySelector('button[aria-label^="Reply to"], button:has-text("Reply"), button[class*="reply"]');
+          if (replyBtn) {
+            replyBtnSelector = replyBtn.tagName + (replyBtn.className ? '.' + replyBtn.className.split(' ').join('.') : '') + ` [text: ${replyBtn.textContent?.trim()}, label: ${replyBtn.getAttribute('aria-label')}]`;
+          }
           break;
         }
         parent = parent.parentElement;
@@ -47,14 +51,14 @@ async function main() {
       }
       
       return {
-        wrapper,
         authorName,
-        level
+        replyBtnSelector
       };
     });
 
     console.log(`\nComment #${i + 1}: "${text.trim()}"`);
     console.log(`  Author: ${details.authorName}`);
+    console.log(`  Reply Button: ${details.replyBtnSelector}`);
   }
 
   await browser.close();
