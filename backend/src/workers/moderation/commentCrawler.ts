@@ -92,8 +92,13 @@ export async function crawlAndReplyComments(
       // ── PLATFORM-SPECIFIC: Handle TikTok CAPTCHA puzzle ──────────────────
       if (platform === "tiktok") {
         try {
-          const captcha = page.locator('div[id*="captcha"], div[class*="captcha"], div[class*="secsdk"], canvas');
-          if (await captcha.first().isVisible({ timeout: 3000 }).catch(() => false)) {
+          const captcha = page.locator(
+            'div[class*="captcha-verify"] >> visible=true, ' +
+            'div[id*="captcha"] >> visible=true, ' +
+            'div[class*="secsdk"] >> visible=true, ' +
+            'canvas >> visible=true'
+          ).first();
+          if (await captcha.count() > 0) {
             console.log("⚠️ TikTok CAPTCHA detected. Waiting 15s for manual solve or auto-timeout...");
             await page.waitForTimeout(15000);
           }
@@ -148,7 +153,7 @@ export async function crawlAndReplyComments(
       }
 
       // ── Fallback: If we have a postId and we are on a grid/profile page, click the specific post link ──
-      if (postId) {
+      if (postId && isActuallyGrid) {
         try {
           const postLink = page.locator(`a[href*="${postId}"]`).first();
           if (await postLink.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -189,8 +194,8 @@ export async function crawlAndReplyComments(
       // Now we are on a post (either via track URL or clicked from grid)
       // Scroll slightly to trigger comment loading (skip for TikTok/Instagram to avoid breaking layouts)
       if (platform !== "tiktok" && platform !== "instagram") {
-        // @ts-ignore
-        await page.evaluate(() => window.scrollBy(0, 1500));
+        await page.mouse.wheel(0, 1500).catch(() => {});
+        await page.waitForTimeout(2000);
       }
 
       // Close common login popups that obscure the screen
@@ -230,8 +235,9 @@ export async function crawlAndReplyComments(
       if (platform === "linkedin") {
         try {
           const commentBtn = page.locator('button.comment-button, button[aria-label*="comment"], button:has-text("Comment")').first();
-          if (await commentBtn.isVisible({ timeout: 3000 }).catch(() => false)) {
-            await commentBtn.click();
+          if (await commentBtn.count() > 0) {
+            await commentBtn.scrollIntoViewIfNeeded().catch(() => {});
+            await commentBtn.click().catch(() => {});
             console.log("💬 LinkedIn: Clicked Comment button to expand comments.");
             await page.waitForTimeout(3000);
           }
@@ -239,8 +245,9 @@ export async function crawlAndReplyComments(
         // Also try clicking "Load more comments"
         try {
           const loadMore = page.locator('button.comments-comments-list__load-more-comments-button, button:has-text("Load more comments")').first();
-          if (await loadMore.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await loadMore.click();
+          if (await loadMore.count() > 0) {
+            await loadMore.scrollIntoViewIfNeeded().catch(() => {});
+            await loadMore.click().catch(() => {});
             await page.waitForTimeout(2000);
           }
         } catch (_) {}
@@ -354,8 +361,13 @@ export async function crawlAndReplyComments(
       // Check for TikTok CAPTCHA again here as it is often triggered during scroll/click actions
       if (platform === "tiktok") {
         try {
-          const captcha = page.locator('div[id*="captcha"], div[class*="captcha"], div[class*="secsdk"], canvas');
-          if (await captcha.first().isVisible({ timeout: 2000 }).catch(() => false)) {
+          const captcha = page.locator(
+            'div[class*="captcha-verify"] >> visible=true, ' +
+            'div[id*="captcha"] >> visible=true, ' +
+            'div[class*="secsdk"] >> visible=true, ' +
+            'canvas >> visible=true'
+          ).first();
+          if (await captcha.count() > 0) {
             console.log("⚠️ TikTok CAPTCHA detected before extraction. Waiting 15s for manual solve...");
             await page.waitForTimeout(15000);
           }
