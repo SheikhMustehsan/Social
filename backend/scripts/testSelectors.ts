@@ -16,45 +16,27 @@ async function main() {
 
   console.log("HTML loaded in Playwright page.");
 
-  const commentNodes = page.locator('[componentkey^="comment-commentary_"]');
-  const count = await commentNodes.count();
-  console.log(`Found ${count} comment elements.`);
-
-  if (count > 0) {
-    const node = commentNodes.first();
-    const text = await node.innerText();
-    console.log(`\nComment #1 Text: "${text.trim()}"`);
-    
-    // Trace and log ALL elements inside the parent wrapper at level 3
-    const elementsInfo = await node.evaluate((el) => {
-      let parent = el.parentElement;
-      let level = 0;
-      const list: string[] = [];
+  // Find all buttons in the page that contain the word "Reply" in text, class, or attributes
+  const buttons = await page.evaluate(() => {
+    const list: string[] = [];
+    document.querySelectorAll('button, [role="button"], span, a').forEach(el => {
+      const text = el.textContent?.trim() || "";
+      const label = el.getAttribute('aria-label') || "";
+      const className = el.className || "";
       
-      while (parent && level < 4) {
-        // Log all elements within this parent level
-        const allTags = Array.from(parent.querySelectorAll('*')).slice(0, 100);
-        allTags.forEach(tag => {
-          const tagName = tag.tagName;
-          const classList = tag.className;
-          const textVal = tag.textContent?.trim() || "";
-          const attrs: Record<string, string> = {};
-          for (let i = 0; i < tag.attributes.length; i++) {
-            const attr = tag.attributes[i];
-            attrs[attr.name] = attr.value;
-          }
-          list.push(`${tagName} [classes: ${classList}] [attrs: ${JSON.stringify(attrs)}] [text: ${textVal.substring(0, 50)}]`);
-        });
-        
-        parent = parent.parentElement;
-        level++;
+      if (
+        text.toLowerCase().includes("reply") || 
+        label.toLowerCase().includes("reply") || 
+        className.toLowerCase().includes("reply")
+      ) {
+        list.push(`${el.tagName} [class: ${className}] [label: ${label}] [text: ${text}]`);
       }
-      return list;
     });
+    return list;
+  });
 
-    console.log("Elements inside the comment container:");
-    console.log(elementsInfo.slice(0, 60).join("\n"));
-  }
+  console.log(`Found ${buttons.length} candidate reply elements:`);
+  console.log(buttons.join("\n"));
 
   await browser.close();
 }
