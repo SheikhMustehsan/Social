@@ -16,27 +16,50 @@ async function main() {
 
   console.log("HTML loaded in Playwright page.");
 
-  // Find all buttons in the page that contain the word "Reply" in text, class, or attributes
-  const buttons = await page.evaluate(() => {
-    const list: string[] = [];
-    document.querySelectorAll('button, [role="button"], span, a').forEach(el => {
-      const text = el.textContent?.trim() || "";
-      const label = el.getAttribute('aria-label') || "";
-      const className = el.className || "";
-      
-      if (
-        text.toLowerCase().includes("reply") || 
-        label.toLowerCase().includes("reply") || 
-        className.toLowerCase().includes("reply")
-      ) {
-        list.push(`${el.tagName} [class: ${className}] [label: ${label}] [text: ${text}]`);
-      }
-    });
-    return list;
-  });
+  const commentNodes = page.locator('[componentkey^="comment-commentary_"], [componentkey^="comment-reply-commentary_"]');
+  const count = await commentNodes.count();
+  console.log(`Found ${count} comment elements.`);
 
-  console.log(`Found ${buttons.length} candidate reply elements:`);
-  console.log(buttons.join("\n"));
+  for (let i = 0; i < count; i++) {
+    const node = commentNodes.nth(i);
+    const text = await node.innerText();
+    
+    const details = await node.evaluate((el) => {
+      let parent = el.parentElement;
+      let level = 0;
+      let authorName = "Unknown";
+      let hasReplyBtn = false;
+      
+      while (parent && level < 15) {
+        const optionsBtn = parent.querySelector('button[aria-label*="View more options for"]');
+        if (optionsBtn) {
+          const label = optionsBtn.getAttribute('aria-label') || "";
+          const match = label.match(/View more options for (.*?)’s (comment|reply)/i);
+          if (match && match[1]) {
+            authorName = match[1];
+          }
+          
+          // Let's find the Reply button inside this container using our new selectors
+          const replyBtn = parent.querySelector('button[aria-label="Reply"], button[aria-label^="Reply to"]');
+          if (replyBtn) {
+            hasReplyBtn = true;
+          }
+          break;
+        }
+        parent = parent.parentElement;
+        level++;
+      }
+      
+      return {
+        authorName,
+        hasReplyBtn
+      };
+    });
+
+    console.log(`\nComment #${i + 1}: "${text.trim()}"`);
+    console.log(`  Author: ${details.authorName}`);
+    console.log(`  Has Reply Button: ${details.hasReplyBtn}`);
+  }
 
   await browser.close();
 }
