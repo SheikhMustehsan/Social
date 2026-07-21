@@ -6,29 +6,15 @@ if (fs.existsSync(htmlPath)) {
   const html = fs.readFileSync(htmlPath, 'utf8');
   console.log("File loaded. Length:", html.length);
   
-  // Find all iframe elements
-  const regex = /<iframe[^>]*>([\s\S]*?)<\/iframe>/gi;
-  let match;
-  let count = 0;
-  console.log("Listing all iframes:");
-  while ((match = regex.exec(html)) !== null) {
-    count++;
-    console.log(`Iframe #${count}:`, match[0].substring(0, 300));
-  }
-
-  // Also match self-closing iframe tags
-  const regexSelf = /<iframe[^>]*\/>/gi;
-  let matchSelf;
-  while ((matchSelf = regexSelf.exec(html)) !== null) {
-    count++;
-    console.log(`Iframe Self #${count}:`, matchSelf[0]);
-  }
-  
-  // Search for any iframe tag anywhere
-  const regexAny = /<iframe[^>]*>/gi;
-  let matchAny;
-  while ((matchAny = regexAny.exec(html)) !== null) {
-    console.log(`Iframe Opening Tag:`, matchAny[0]);
+  // Find where captcha-verify-container is in the HTML
+  // Print 500 characters before and after its occurrence
+  const index = html.indexOf("captcha-verify-container");
+  if (index !== -1) {
+    console.log("Found captcha-verify-container at index:", index);
+    console.log("Context around captcha-verify-container:\n");
+    console.log(html.substring(Math.max(0, index - 300), Math.min(html.length, index + 500)));
+  } else {
+    console.log("captcha-verify-container not found as a literal string.");
   }
 } else {
   console.log("debug_tiktok.html not found.");
