@@ -98,7 +98,8 @@ export async function crawlAndReplyComments(
             'div[class*="secsdk"] >> visible=true, ' +
             'canvas >> visible=true'
           ).first();
-          if (await captcha.count() > 0) {
+          const isCaptchaVisible = await captcha.waitFor({ state: "visible", timeout: 3000 }).then(() => true).catch(() => false);
+          if (isCaptchaVisible) {
             console.log("⚠️ TikTok CAPTCHA detected. Waiting 15s for manual solve or auto-timeout...");
             await page.waitForTimeout(15000);
           }
@@ -133,6 +134,7 @@ export async function crawlAndReplyComments(
 
       // ── Detect Redirects or Grid landing ─────────────────────────────────
       const currentUrl = page.url();
+      console.log(`  [Navigation] Target URL: ${target.url} -> Resolved URL: ${currentUrl}`);
       let isActuallyGrid = target.isGrid;
       let postId = "";
       
@@ -194,6 +196,7 @@ export async function crawlAndReplyComments(
       // Now we are on a post (either via track URL or clicked from grid)
       // Scroll slightly to trigger comment loading (skip for TikTok/Instagram to avoid breaking layouts)
       if (platform !== "tiktok" && platform !== "instagram") {
+        await page.mouse.move(400, 400).catch(() => {});
         await page.mouse.wheel(0, 1500).catch(() => {});
         await page.waitForTimeout(2000);
       }
@@ -345,8 +348,11 @@ export async function crawlAndReplyComments(
       console.log(`🔄 Scrolling to load comments for 6 seconds...`);
       const startTime = Date.now();
       while (Date.now() - startTime < 6000) {
+        // Scroll the main page viewport under the center cursor
+        await page.mouse.move(450, 450).catch(() => {});
+        await page.mouse.wheel(0, 800).catch(() => {});
+        
         await page.evaluate(() => {
-          window.scrollBy(0, 800);
           // Also scroll any overflow containers (comment panels)
           document.querySelectorAll<HTMLElement>('div[class*="comment"], div[class*="Comment"], section').forEach(el => {
             const style = window.getComputedStyle(el);
@@ -367,7 +373,8 @@ export async function crawlAndReplyComments(
             'div[class*="secsdk"] >> visible=true, ' +
             'canvas >> visible=true'
           ).first();
-          if (await captcha.count() > 0) {
+          const isCaptchaVisible = await captcha.waitFor({ state: "visible", timeout: 2000 }).then(() => true).catch(() => false);
+          if (isCaptchaVisible) {
             console.log("⚠️ TikTok CAPTCHA detected before extraction. Waiting 15s for manual solve...");
             await page.waitForTimeout(15000);
           }
