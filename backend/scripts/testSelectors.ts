@@ -39,8 +39,13 @@ async function main() {
             authorName = match[1];
           }
           
-          // Let's find any button that looks like a Reply button in this comment container
-          const replyBtn = parent.querySelector('button[aria-label^="Reply to"], button:has-text("Reply"), button[class*="reply"]');
+          // Let's find any button that looks like a Reply button in standard JS
+          const buttons = Array.from(parent.querySelectorAll('button'));
+          const replyBtn = buttons.find(btn => {
+            const btnText = btn.innerText.trim();
+            const btnLabel = btn.getAttribute('aria-label') || "";
+            return btnText === "Reply" || btnLabel.startsWith("Reply to") || btn.className.includes("reply");
+          });
           if (replyBtn) {
             replyBtnSelector = replyBtn.tagName + (replyBtn.className ? '.' + replyBtn.className.split(' ').join('.') : '') + ` [text: ${replyBtn.textContent?.trim()}, label: ${replyBtn.getAttribute('aria-label')}]`;
           }
