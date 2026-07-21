@@ -424,32 +424,90 @@ export async function crawlAndReplyComments(
             });
 
           } else if (plat === "linkedin") {
-            // LinkedIn: real comment container class is comments-comment-entity
-            const nodes = document.querySelectorAll(
-              'article.comments-comment-entity, ' +
-              'article.comments-comment-item, ' +
-              'li.comments-comment-item'
+            // ── LinkedIn: Self-healing comment extraction ──
+            // Strategy 1 (Primary): Use stable componentkey attributes
+            //   - Comment text lives in <p componentkey="comment-commentary_...">
+            //   - Reply text lives in <p componentkey="comment-reply-commentary_...">
+            //   - Author name is extracted from the options button aria-label
+            const commentaryNodes = document.querySelectorAll(
+              '[componentkey^="comment-commentary_"], ' +
+              '[componentkey^="comment-reply-commentary_"]'
             );
-            nodes.forEach((node: Element) => {
-              // Author: in .comments-comment-meta__description-title span
-              const authorEl = node.querySelector(
-                '.comments-comment-meta__description-title span:not(.visually-hidden), ' +
-                'h3.comments-comment-meta__description span:first-child, ' +
-                '.comments-post-meta__name-text span[aria-hidden="true"]'
-              ) as HTMLElement;
-              const author = authorEl?.textContent?.trim() || "Unknown";
 
-              // Text: the actual comment content (not metadata)
-              const textEl = node.querySelector(
-                '.comments-comment-item__main-content, ' +
-                'span[dir="ltr"], ' +
-                'p[dir="ltr"], ' +
-                '.update-components-text span'
-              ) as HTMLElement;
-              const text = textEl?.textContent?.trim() || "";
+            if (commentaryNodes.length > 0) {
+              commentaryNodes.forEach((node: Element) => {
+                const text = node.textContent?.trim() || "";
+                let author = "Unknown";
 
-              if (text && author !== "Unknown") comments.push({ author, text });
-            });
+                // Walk up to find the comment container with the options button
+                let parent = node.parentElement;
+                let level = 0;
+                while (parent && level < 15) {
+                  const optionsBtn = parent.querySelector('button[aria-label*="View more options for"]');
+                  if (optionsBtn) {
+                    const label = optionsBtn.getAttribute('aria-label') || "";
+                    const match = label.match(/View more options for (.*?)'s (comment|reply)/i);
+                    if (match && match[1]) {
+                      author = match[1];
+                    }
+                    break;
+                  }
+                  parent = parent.parentElement;
+                  level++;
+                }
+
+                if (text && author !== "Unknown") comments.push({ author, text });
+              });
+            }
+
+            // Strategy 2 (Fallback): Use legacy class-based selectors
+            if (comments.length === 0) {
+              const legacyNodes = document.querySelectorAll(
+                'article.comments-comment-entity, ' +
+                'article.comments-comment-item, ' +
+                'li.comments-comment-item'
+              );
+              legacyNodes.forEach((node: Element) => {
+                const authorEl = node.querySelector(
+                  '.comments-comment-meta__description-title span:not(.visually-hidden), ' +
+                  'h3.comments-comment-meta__description span:first-child, ' +
+                  '.comments-post-meta__name-text span[aria-hidden="true"]'
+                ) as HTMLElement;
+                const author = authorEl?.textContent?.trim() || "Unknown";
+                const textEl = node.querySelector(
+                  '.comments-comment-item__main-content, ' +
+                  'span[dir="ltr"], p[dir="ltr"], ' +
+                  '.update-components-text span'
+                ) as HTMLElement;
+                const text = textEl?.textContent?.trim() || "";
+                if (text && author !== "Unknown") comments.push({ author, text });
+              });
+            }
+
+            // Strategy 3 (Self-healing fuzzy fallback): Scan all buttons with
+            // aria-label containing "options" + "comment" and extract text from siblings
+            if (comments.length === 0) {
+              const optionsBtns = document.querySelectorAll('button[aria-label*="options"]');
+              optionsBtns.forEach((btn: Element) => {
+                const label = btn.getAttribute('aria-label') || "";
+                const match = label.match(/options for (.*?)'s (comment|reply)/i);
+                if (!match) return;
+                const author = match[1];
+                // Walk up to find text siblings
+                let container = btn.parentElement;
+                let lvl = 0;
+                while (container && lvl < 10) {
+                  const expandable = container.querySelector('[data-testid="expandable-text-box"]');
+                  if (expandable) {
+                    const text = expandable.textContent?.trim() || "";
+                    if (text) comments.push({ author, text });
+                    break;
+                  }
+                  container = container.parentElement;
+                  lvl++;
+                }
+              });
+            }
 
           } else if (plat === "facebook") {
             // Facebook comment divs
@@ -526,44 +584,106 @@ export async function crawlAndReplyComments(
         // ── Click Reply button for this comment ────────────────────────────
         console.log(`  🔍 Locating reply button for comment by ${authorText}...`);
         let replied = false;
-        try {
-          // Strategy 1: find comment wrapper containing author text, then find Reply button inside
-          const commentWrappers = page.locator(
-            'article.comments-comment-entity, article.comments-comment-item, article[data-id], li.comments-comment-item, ' +
-            'div[data-e2e="comment-level-1"], div[class*="CommentItem"], ' +
-            'li._a9zr, div[role="listitem"], li[role="menuitem"]'
-          );
-          const count = await commentWrappers.count();
-          for (let i = 0; i < Math.min(count, 30); i++) {
-            const wrapper = commentWrappers.nth(i);
-            const wrapperText = await wrapper.textContent().catch(() => "");
-            if (wrapperText && wrapperText.includes(authorText.trim())) {
-              // Found the comment wrapper — look for Reply button inside (broadened to support [role=button])
-              const replyBtn = wrapper.locator(
-                'button:has-text("Reply"), [role="button"]:has-text("Reply"), ' +
-                'span:has-text("Reply"), a:has-text("Reply"), ' +
-                'div[data-e2e="comment-reply-1"], button[data-e2e="comment-reply"]'
-              ).first();
-              
-              if (await replyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-                await replyBtn.scrollIntoViewIfNeeded();
-                await replyBtn.click().catch(async () => {
-                  await replyBtn.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+
+        // ── LinkedIn-specific: Use stable aria-label selectors ──
+        if (platform === "linkedin" && !replied) {
+          try {
+            // Find the comment container by locating the options button with the author's name
+            const optionsBtns = page.locator(`button[aria-label*="View more options for ${authorText.trim()}"]`);
+            const optCount = await optionsBtns.count();
+            for (let oi = 0; oi < optCount; oi++) {
+              const optBtn = optionsBtns.nth(oi);
+              // Walk up to find the comment container, then find Reply button inside it
+              const replyBtn = await optBtn.evaluate((el) => {
+                let parent = el.parentElement;
+                let level = 0;
+                while (parent && level < 15) {
+                  const reply = parent.querySelector('button[aria-label="Reply"]');
+                  if (reply) return true;
+                  parent = parent.parentElement;
+                  level++;
+                }
+                return false;
+              });
+              if (replyBtn) {
+                // Now click the Reply button by navigating from the options button
+                await optBtn.evaluate((el) => {
+                  let parent = el.parentElement;
+                  let level = 0;
+                  while (parent && level < 15) {
+                    const reply = parent.querySelector('button[aria-label="Reply"]') as HTMLElement;
+                    if (reply) {
+                      reply.scrollIntoView({ block: 'center' });
+                      reply.click();
+                      return;
+                    }
+                    parent = parent.parentElement;
+                    level++;
+                  }
                 });
                 replied = true;
-                console.log(`  ✅ Clicked Reply inside comment wrapper.`);
-                break;
-              } else {
-                // Fallback: Click via JS if hidden in DOM
-                await replyBtn.evaluate((el: HTMLElement) => el.click()).catch(() => {});
-                replied = true;
-                console.log(`  ✅ Clicked Reply inside comment wrapper via JS.`);
+                console.log(`  ✅ LinkedIn: Clicked Reply via aria-label selector for ${authorText.trim()}.`);
                 break;
               }
             }
+          } catch (e) {
+            console.log(`  ⚠️ LinkedIn aria-label reply strategy failed: ${e}`);
           }
-        } catch (e) {
-          console.log(`  ⚠️ Error clicking reply: ${e}`);
+        }
+
+        // ── Generic / fallback: find comment wrapper containing author text ──
+        if (!replied) {
+          try {
+            const commentWrappers = page.locator(
+              'article.comments-comment-entity, article.comments-comment-item, article[data-id], li.comments-comment-item, ' +
+              'div[data-e2e="comment-level-1"], div[class*="CommentItem"], ' +
+              'li._a9zr, div[role="listitem"], li[role="menuitem"]'
+            );
+            const count = await commentWrappers.count();
+            for (let i = 0; i < Math.min(count, 30); i++) {
+              const wrapper = commentWrappers.nth(i);
+              const wrapperText = await wrapper.textContent().catch(() => "");
+              if (wrapperText && wrapperText.includes(authorText.trim())) {
+                const replyBtn = wrapper.locator(
+                  'button:has-text("Reply"), [role="button"]:has-text("Reply"), ' +
+                  'span:has-text("Reply"), a:has-text("Reply"), ' +
+                  'div[data-e2e="comment-reply-1"], button[data-e2e="comment-reply"]'
+                ).first();
+                
+                if (await replyBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
+                  await replyBtn.scrollIntoViewIfNeeded();
+                  await replyBtn.click().catch(async () => {
+                    await replyBtn.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+                  });
+                  replied = true;
+                  console.log(`  ✅ Clicked Reply inside comment wrapper.`);
+                  break;
+                } else {
+                  await replyBtn.evaluate((el: HTMLElement) => el.click()).catch(() => {});
+                  replied = true;
+                  console.log(`  ✅ Clicked Reply inside comment wrapper via JS.`);
+                  break;
+                }
+              }
+            }
+          } catch (e) {
+            console.log(`  ⚠️ Error clicking reply: ${e}`);
+          }
+        }
+
+        // ── Self-healing fuzzy fallback: search ALL buttons for Reply keyword ──
+        if (!replied) {
+          try {
+            const fuzzyReplyBtn = page.locator('button[aria-label="Reply"], button[aria-label^="Reply to"]').first();
+            if (await fuzzyReplyBtn.isVisible({ timeout: 2000 }).catch(() => false)) {
+              await fuzzyReplyBtn.scrollIntoViewIfNeeded();
+              await fuzzyReplyBtn.click();
+              replied = true;
+              console.log(`  ✅ Clicked Reply via fuzzy aria-label fallback.`);
+            }
+          } catch (e) {
+            console.log(`  ⚠️ Fuzzy reply fallback failed: ${e}`);
+          }
         }
 
         if (!replied) {
