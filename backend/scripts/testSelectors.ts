@@ -16,29 +16,22 @@ async function main() {
 
   console.log("HTML loaded in Playwright page.");
 
-  // Test 1: Let's find all comment elements by looking for elements containing componentkey starting with comment-commentary_
-  const commentNodes = page.locator('[componentkey^="comment-commentary_"]');
+  // Test both comment-commentary and comment-reply-commentary
+  const commentNodes = page.locator('[componentkey^="comment-commentary_"], [componentkey^="comment-reply-commentary_"]');
   const count = await commentNodes.count();
-  console.log(`Found ${count} comment commentary elements.`);
+  console.log(`Found ${count} comment elements.`);
 
   for (let i = 0; i < count; i++) {
     const node = commentNodes.nth(i);
     const text = await node.innerText();
     
-    // Let's find the nearest button with aria-label containing "View more options for"
-    // Usama Aslam's comment has a button inside the same parent list item or article container.
-    // Let's search upwards for a container, then look inside it for the author name or aria-label options button
-    
-    // We can evaluate in the browser to trace parents
     const details = await node.evaluate((el) => {
-      // Find the parent element that wraps the whole comment (usually an article, section, or list item)
       let parent = el.parentElement;
       let level = 0;
       let wrapper = null;
       let authorName = "Unknown";
       
       while (parent && level < 15) {
-        // Let's look for a button with aria-label matching 'View more options for'
         const optionsBtn = parent.querySelector('button[aria-label*="View more options for"]');
         if (optionsBtn) {
           const label = optionsBtn.getAttribute('aria-label') || "";
@@ -62,7 +55,6 @@ async function main() {
 
     console.log(`\nComment #${i + 1}: "${text.trim()}"`);
     console.log(`  Author: ${details.authorName}`);
-    console.log(`  Wrapper at level ${details.level}: ${details.wrapper}`);
   }
 
   await browser.close();
