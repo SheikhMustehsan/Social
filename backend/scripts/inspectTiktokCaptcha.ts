@@ -6,24 +6,29 @@ if (fs.existsSync(htmlPath)) {
   const html = fs.readFileSync(htmlPath, 'utf8');
   console.log("File loaded. Length:", html.length);
   
-  // Find text matching "puzzle" or "slider" or "drag"
-  const regexText = /[^<]{0,100}(puzzle|slider|drag|captcha)[^<]{0,100}/gi;
+  // Find all iframe elements
+  const regex = /<iframe[^>]*>([\s\S]*?)<\/iframe>/gi;
   let match;
   let count = 0;
-  console.log("Searching text matches:");
-  while ((match = regexText.exec(html)) !== null && count < 20) {
+  console.log("Listing all iframes:");
+  while ((match = regex.exec(html)) !== null) {
     count++;
-    console.log(`Match ${count}:`, match[0].trim());
+    console.log(`Iframe #${count}:`, match[0].substring(0, 300));
   }
 
-  // Look for elements with tag name or classes containing captcha or secsdk or verify
-  console.log("\nSearching for class names with captcha, verify, secsdk, wrapper, container:");
-  const classRegex = /class="([^"]*(captcha|verify|secsdk|puzzle|slider)[^"]*)"/gi;
-  let cMatch;
-  let cCount = 0;
-  while ((cMatch = classRegex.exec(html)) !== null && cCount < 20) {
-    cCount++;
-    console.log(`Class Match ${cCount}:`, cMatch[1]);
+  // Also match self-closing iframe tags
+  const regexSelf = /<iframe[^>]*\/>/gi;
+  let matchSelf;
+  while ((matchSelf = regexSelf.exec(html)) !== null) {
+    count++;
+    console.log(`Iframe Self #${count}:`, matchSelf[0]);
+  }
+  
+  // Search for any iframe tag anywhere
+  const regexAny = /<iframe[^>]*>/gi;
+  let matchAny;
+  while ((matchAny = regexAny.exec(html)) !== null) {
+    console.log(`Iframe Opening Tag:`, matchAny[0]);
   }
 } else {
   console.log("debug_tiktok.html not found.");
