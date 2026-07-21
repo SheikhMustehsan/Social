@@ -16,54 +16,44 @@ async function main() {
 
   console.log("HTML loaded in Playwright page.");
 
-  const commentNodes = page.locator('[componentkey^="comment-commentary_"], [componentkey^="comment-reply-commentary_"]');
+  const commentNodes = page.locator('[componentkey^="comment-commentary_"]');
   const count = await commentNodes.count();
   console.log(`Found ${count} comment elements.`);
 
-  for (let i = 0; i < count; i++) {
-    const node = commentNodes.nth(i);
+  if (count > 0) {
+    const node = commentNodes.first();
     const text = await node.innerText();
+    console.log(`\nComment #1 Text: "${text.trim()}"`);
     
-    const details = await node.evaluate((el) => {
+    // Trace and log ALL elements inside the parent wrapper at level 3
+    const elementsInfo = await node.evaluate((el) => {
       let parent = el.parentElement;
       let level = 0;
-      let authorName = "Unknown";
-      let replyBtnSelector = "None";
+      const list: string[] = [];
       
-      while (parent && level < 15) {
-        const optionsBtn = parent.querySelector('button[aria-label*="View more options for"]');
-        if (optionsBtn) {
-          const label = optionsBtn.getAttribute('aria-label') || "";
-          const match = label.match(/View more options for (.*?)’s (comment|reply)/i);
-          if (match && match[1]) {
-            authorName = match[1];
+      while (parent && level < 4) {
+        // Log all elements within this parent level
+        const allTags = Array.from(parent.querySelectorAll('*')).slice(0, 100);
+        allTags.forEach(tag => {
+          const tagName = tag.tagName;
+          const classList = tag.className;
+          const textVal = tag.textContent?.trim() || "";
+          const attrs: Record<string, string> = {};
+          for (let i = 0; i < tag.attributes.length; i++) {
+            const attr = tag.attributes[i];
+            attrs[attr.name] = attr.value;
           }
-          
-          // Let's find any button that looks like a Reply button in standard JS
-          const buttons = Array.from(parent.querySelectorAll('button'));
-          const replyBtn = buttons.find(btn => {
-            const btnText = btn.innerText.trim();
-            const btnLabel = btn.getAttribute('aria-label') || "";
-            return btnText === "Reply" || btnLabel.startsWith("Reply to") || btn.className.includes("reply");
-          });
-          if (replyBtn) {
-            replyBtnSelector = replyBtn.tagName + (replyBtn.className ? '.' + replyBtn.className.split(' ').join('.') : '') + ` [text: ${replyBtn.textContent?.trim()}, label: ${replyBtn.getAttribute('aria-label')}]`;
-          }
-          break;
-        }
+          list.push(`${tagName} [classes: ${classList}] [attrs: ${JSON.stringify(attrs)}] [text: ${textVal.substring(0, 50)}]`);
+        });
+        
         parent = parent.parentElement;
         level++;
       }
-      
-      return {
-        authorName,
-        replyBtnSelector
-      };
+      return list;
     });
 
-    console.log(`\nComment #${i + 1}: "${text.trim()}"`);
-    console.log(`  Author: ${details.authorName}`);
-    console.log(`  Reply Button: ${details.replyBtnSelector}`);
+    console.log("Elements inside the comment container:");
+    console.log(elementsInfo.slice(0, 60).join("\n"));
   }
 
   await browser.close();
